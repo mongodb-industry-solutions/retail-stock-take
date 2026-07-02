@@ -42,6 +42,13 @@ def ensure_collection_ready() -> None:
             # verify pre/post images rather than trusting how it got created.
             log.info("collection %s.%s created concurrently — verifying", mdb.database_name, coll_name)
         infos = list(mdb.db.list_collections(filter={"name": coll_name}))
+        if not infos:
+            msg = (
+                f"collection {mdb.database_name}.{coll_name} still missing after concurrent "
+                "create retry; refusing to run collMod"
+            )
+            log.error(msg)
+            raise RuntimeError(msg)
 
     opts = infos[0].get("options", {}) if infos else {}
     pre_post = opts.get("changeStreamPreAndPostImages") or {}
