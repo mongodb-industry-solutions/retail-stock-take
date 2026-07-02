@@ -7,9 +7,12 @@
 #
 # Prereqs (see KANOPY_DEPLOYMENT_README.md + docs/architecture.md):
 #   - Drone secrets: ecr_access_key, ecr_secret_key, staging/prod kubernetes tokens
-#   - k8s secret  retail-stock-take-secrets : MONGODB_URI, PS_DATA_SOURCE_URI, PS_MONGO_URI (Atlas SRV)
+#   - k8s secret  retail-stock-take : MONGODB_URI, PS_DATA_SOURCE_URI, PS_MONGO_URI (Atlas SRV),
+#                                             GROVE_API_KEY (Grove gateway key for cloud CV)
 #   - k8s secret  jwt-keys                  : jwt-private.pem + jwt-public.pem
 #   - k8s configmap powersync-config        : powersync.yaml + sync-rules.yaml
+# Cloud CV uses Grove (OpenAI-compatible VLM gateway). No AWS S3 bucket/IRSA
+# needed: the photo store is disabled in cloud (STORAGE_PROVIDER=none).
 kind: pipeline
 type: kubernetes
 name: staging

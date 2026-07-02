@@ -27,8 +27,8 @@ ADMIN_PW=$(kubectl -n mongodb get secret retail-mongodb-retail-admin-admin \
 ### 1. Stack is up
 
 ```bash
-curl -s http://frontend.localtest.me/api/health | jq
-# expect: {"status":"ok","mongo":"ok","storage":"ok","ollama":"ok","powersync":"ok"}
+curl -s http://localhost/api/health | jq
+# expect: {"status":"ok","mongo":"ok","storage":"ok","cv":"ok","cv_provider":"ollama","powersync":"ok"}
 
 curl -s -o /dev/null -w "%{http_code}\n" http://powersync.localtest.me/probes/liveness
 # expect: 200

@@ -1,5 +1,5 @@
 # Self-hosted PowerSync (production). Loaded after environment/production.yaml.
-# Requires configmap powersync-config + secret retail-stock-take-secrets
+# Requires configmap powersync-config + secret retail-stock-take
 # (PS_DATA_SOURCE_URI + PS_MONGO_URI) in the namespace.
 args: ["start", "-r", "unified"]
 services:
@@ -22,8 +22,8 @@ env:
   PS_JWT_AUDIENCE: powersync
   PS_JWT_ISSUER: retail-stock-take
 envSecrets:
-  PS_DATA_SOURCE_URI: retail-stock-take-secrets
-  PS_MONGO_URI: retail-stock-take-secrets
+  PS_DATA_SOURCE_URI: retail-stock-take
+  PS_MONGO_URI: retail-stock-take
 extraVolumes:
   - name: powersync-config
     configMap:

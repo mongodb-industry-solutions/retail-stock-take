@@ -60,9 +60,11 @@ env:
   # PowerSync URLs: public (browser, via Ingress) + internal (health probe)
   POWERSYNC_PUBLIC_URL: http://powersync.localtest.me
   POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
-  # CV: Ollama runs in-cluster (infra/k8s/ollama/ollama.yaml).
+  # CV: Ollama runs in-cluster (infra/k8s/ollama/ollama.yaml). Cloud uses Grove
+  # instead (CV_PROVIDER=grove in environment/*-backend.yaml).
   # Moondream only — no fallback (qwen2.5vl:7b exceeds available CPU memory).
   # 300s timeout covers cold-start model load on first capture.
+  CV_PROVIDER: ollama
   OLLAMA_BASE_URL: http://ollama:11434
   OLLAMA_MODEL: moondream
   OLLAMA_FALLBACK_MODEL: ""

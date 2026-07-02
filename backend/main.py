@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import auth, health, inventory
 from db.bootstrap import ensure_collection_ready
 from retention.reconciler import run_periodic
-from storage import get_storage_adapter
+from storage import get_storage_adapter, storage_enabled
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -20,10 +20,13 @@ log = logging.getLogger("backend")
 async def lifespan(_app: FastAPI):
     ensure_collection_ready()
     auth.load_keys()
-    try:
-        get_storage_adapter().ensure_bucket()
-    except Exception as e:  # noqa: BLE001 — soft-fail so partial bring-up still starts
-        log.warning("object storage not ready at startup: %s", e)
+    if storage_enabled():
+        try:
+            get_storage_adapter().ensure_bucket()
+        except Exception as e:  # noqa: BLE001 — soft-fail so partial bring-up still starts
+            log.warning("object storage not ready at startup: %s", e)
+    else:
+        log.info("photo store disabled (STORAGE_PROVIDER=none)")
 
     stop = asyncio.Event()
     reconciler = asyncio.create_task(run_periodic(stop))

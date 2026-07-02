@@ -18,8 +18,11 @@ Three `mongodb/web-app` (chart 4.30.0) Helm releases, deployed via Drone:
 Images (backend + frontend) are built by Drone → pushed to ECR. PowerSync uses the
 upstream image directly (no build step).
 
-MongoDB → **Atlas**. Object storage → **AWS S3** (IRSA, no static keys). CV capture
-is **not available in cloud** (no Ollama) — storage, sync, and vector search work.
+MongoDB → **Atlas**. CV capture in cloud runs through **Grove** (MongoDB's
+GenAI gateway — OpenAI-compatible, vision). The **photo store is disabled in
+cloud for now** (`STORAGE_PROVIDER=none`): capture keeps the inventory metadata
+and syncs it, but does not persist the raw frame — so **no AWS S3 bucket / IRSA
+is required**. (Re-enable object storage later; see Known limitations.)
 
 ---
 
@@ -48,12 +51,12 @@ push. Drone will fail silently if secrets/configmaps are missing.
 ### 1. Atlas cluster
 
 - Create an Atlas cluster (M10+ for change streams).
-- Create three database users: `app` (readWrite on `retail_demo`), `powersync`
-  (readWrite on `powersync`, read on `retail_demo`, clusterMonitor), `admin` (root).
+- Create three database users: `app` (readWrite on `retail-stock-take`), `powersync`
+  (readWrite on `rs-powersync`, read on `retail-stock-take`, clusterMonitor), `admin` (root).
 - Enable change stream pre/post images on the `inventory_captures` collection:
 
   ```js
-  db.getSiblingDB("retail_demo").runCommand({
+  db.getSiblingDB("retail-stock-take").runCommand({
     collMod: "inventory_captures",
     changeStreamPreAndPostImages: { enabled: true }
   })
@@ -61,16 +64,21 @@ push. Drone will fail silently if secrets/configmaps are missing.
 
 - Whitelist the Kanopy egress IPs in Atlas Network Access.
 
-### 2. AWS S3 buckets
+### 2. Grove (cloud CV provider)
 
-| Environment | Bucket name |
-|---|---|
-| Staging | `retail-stock-take-media-staging` |
-| Production | `retail-stock-take-media-prod` |
+Request access at **grove.aix.prod.corp.mongodb.com/requests** — a **service
+(tier-2) key** for a vision model (default `gpt-5.5`, fallback `gpt-4o`; any
+vision-capable Grove model works). The request's **Usage** section shows the
+provisioned base URL + model; override `GROVE_BASE_URL` / `GROVE_MODEL` in
+`environment/*-backend.yaml` if they differ from the defaults. The key goes into
+the `retail-stock-take` Secret as `GROVE_API_KEY` (next step).
 
-Create in `us-east-1`. No public access. The IRSA role (`kanopy-staging-cicd-irsa` /
-`kanopy-prod-cicd-irsa`) must have `s3:PutObject`, `s3:GetObject`, `s3:HeadObject`,
-`s3:DeleteObject`, `s3:ListBucket` on the bucket.
+> **AWS S3 is not required right now.** The photo store is disabled in cloud
+> (`STORAGE_PROVIDER=none`). To enable it later: create buckets
+> `retail-stock-take-media-staging` / `-prod` in `us-east-1` (no public access),
+> grant the IRSA role (`kanopy-staging-cicd-irsa` / `kanopy-prod-cicd-irsa`)
+> `s3:PutObject/GetObject/HeadObject/DeleteObject/ListBucket`, then set
+> `STORAGE_PROVIDER=s3` + `STORAGE_BUCKET` in `environment/*-backend.yaml`.
 
 ### 3. JWT keypair
 
@@ -83,29 +91,58 @@ openssl rsa -in jwt-private.pem -pubout -out jwt-public.pem
 
 Keep the private key out of the repo. Store it in a password manager.
 
-### 4. Kubernetes secrets and configmap
+### 4. Kubernetes secrets and configmap — cloud secrets checklist
 
-Run against the correct cluster context (`kubectl config use-context <kanopy-staging>`):
+Three namespace objects must exist **before** the Drone deploy runs — Helm only
+*references* them, it never creates them. Create all three in **each** target
+cluster (staging **and** prod). A missing/renamed object → pods crash-loop.
+
+- [ ] **Secret `retail-stock-take`** — `MONGODB_URI`, `PS_DATA_SOURCE_URI`,
+      `PS_MONGO_URI` (Atlas SRV strings) + `GROVE_API_KEY` (Grove gateway key).
+      Consumed via `envSecrets` in `environment/*-backend.yaml` + `*-powersync.yaml`.
+- [ ] **Secret `jwt-keys`** — files `jwt-private.pem` + `jwt-public.pem` (from
+      §3). Mounted at `/secrets` by the backend (`volumeSecrets`); `JWT_PRIVATE_KEY_PATH`
+      / `JWT_PUBLIC_KEY_PATH` point at those files.
+- [ ] **ConfigMap `powersync-config`** — `powersync.yaml` + `sync-rules.yaml`.
+      Mounted at `/config` by the PowerSync release. It's a snapshot — recreate
+      it whenever either file changes.
+
+Run once per cluster from the repo root (after generating the JWT keypair, §3).
+The `--dry-run | apply` form is **idempotent** — safe to re-run, e.g. to add
+`GROVE_API_KEY` to an existing secret:
 
 ```bash
-# Atlas connection strings (replace <PASSWORD> with the actual values)
-kubectl -n industrysolutions create secret generic retail-stock-take-secrets \
-  --from-literal=MONGODB_URI="mongodb+srv://app:<PASSWORD>@<cluster>.mongodb.net/retail_demo?authSource=admin" \
-  --from-literal=PS_DATA_SOURCE_URI="mongodb+srv://powersync:<PASSWORD>@<cluster>.mongodb.net/retail_demo?authSource=admin" \
-  --from-literal=PS_MONGO_URI="mongodb+srv://powersync:<PASSWORD>@<cluster>.mongodb.net/powersync?authSource=admin"
+# 1. Pick the cluster + namespace (run this whole block again for prod)
+kubectl config use-context api.staging.corp.mongodb.com   # api.prod.corp.mongodb.com for prod
+NAMESPACE=industrysolutions
 
-# JWT keypair
-kubectl -n industrysolutions create secret generic jwt-keys \
+# 2. App secrets — Atlas SRV strings + Grove key. Replace <PASSWORD> / <GROVE_API_KEY>.
+kubectl -n "$NAMESPACE" create secret generic retail-stock-take \
+  --from-literal=MONGODB_URI="mongodb+srv://app:<PASSWORD>@<cluster>.mongodb.net/retail-stock-take?authSource=admin" \
+  --from-literal=PS_DATA_SOURCE_URI="mongodb+srv://powersync:<PASSWORD>@<cluster>.mongodb.net/retail-stock-take?authSource=admin" \
+  --from-literal=PS_MONGO_URI="mongodb+srv://powersync:<PASSWORD>@<cluster>.mongodb.net/rs-powersync?authSource=admin" \
+  --from-literal=GROVE_API_KEY="<GROVE_API_KEY>" \
+  --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+
+# 3. JWT keypair (the PEMs generated in §3, in the current directory).
+kubectl -n "$NAMESPACE" create secret generic jwt-keys \
   --from-file=jwt-private.pem=./jwt-private.pem \
-  --from-file=jwt-public.pem=./jwt-public.pem
+  --from-file=jwt-public.pem=./jwt-public.pem \
+  --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
 
-# PowerSync config files
-kubectl -n industrysolutions create configmap powersync-config \
+# 4. PowerSync config (mounted at /config).
+kubectl -n "$NAMESPACE" create configmap powersync-config \
   --from-file=powersync.yaml=powersync/powersync.yaml \
-  --from-file=sync-rules.yaml=powersync/sync-rules.yaml
+  --from-file=sync-rules.yaml=powersync/sync-rules.yaml \
+  --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+
+# 5. Verify all three exist.
+kubectl -n "$NAMESPACE" get secret retail-stock-take jwt-keys -o name
+kubectl -n "$NAMESPACE" get configmap powersync-config -o name
 ```
 
-Repeat for production (switching context).
+> **No AWS S3 secret/bucket needed** — the cloud photo store is off
+> (`STORAGE_PROVIDER=none`). Re-enable per §2 if you later want persisted frames.
 
 ### 5. Drone secrets
 
@@ -159,12 +196,16 @@ PowerSync is **not built** — the Drone step sets `image.repository` +
 
 | Key | Staging | Production | Notes |
 |---|---|---|---|
-| `STORAGE_BUCKET` | `retail-stock-take-media-staging` | `retail-stock-take-media-prod` | S3 bucket name |
-| `STORAGE_FORCE_PATH_STYLE` | `false` | `false` | AWS S3 virtual-host addressing |
-| `RETENTION_DAYS` | `7` | `30` | Days before docs expire |
+| `STORAGE_PROVIDER` | `none` | `none` | Photo store off in cloud (metadata only). Set `s3` + `STORAGE_BUCKET` to re-enable |
+| `CV_PROVIDER` | `grove` | `grove` | Cloud vision backend (local uses `ollama`) |
+| `GROVE_BASE_URL` | Grove gateway URL | same | OpenAI-compatible endpoint; from your Grove request |
+| `GROVE_MODEL` | `gpt-5.5` | `gpt-5.5` | Primary vision model (env-overridable) |
+| `GROVE_FALLBACK_MODEL` | `gpt-4o` | `gpt-4o` | Auto-fallback on failure |
+| `GROVE_API_KEY` | from secret | from secret | Grove key, key in `retail-stock-take` |
+| `RETENTION_DAYS` | `7` | `30` | Days before docs expire (no-op while photo store off) |
 | `POWERSYNC_PUBLIC_URL` | `https://…staging.corp.mongodb.com` | `https://…prod.corp.mongodb.com` | Delivered to browser via `/api/auth/token` |
 | `POWERSYNC_INTERNAL_URL` | `http://retail-stock-take-powersync-web-app-80` | same | In-cluster health probe |
-| `MONGODB_URI` | from secret | from secret | Atlas SRV string, key in `retail-stock-take-secrets` |
+| `MONGODB_URI` | from secret | from secret | Atlas SRV string, key in `retail-stock-take` |
 
 ### Frontend env
 
@@ -178,8 +219,8 @@ PowerSync is **not built** — the Drone step sets `image.repository` +
 | Key | Value | Notes |
 |---|---|---|
 | `PS_JWKS_URL` | `http://retail-stock-take-backend-web-app-80/api/auth/keys` | In-cluster; backend need not have ingress |
-| `PS_DATA_SOURCE_URI` | from secret | Atlas SRV for the source (`retail_demo`) DB |
-| `PS_MONGO_URI` | from secret | Atlas SRV for the PowerSync bucket (`powersync`) DB |
+| `PS_DATA_SOURCE_URI` | from secret | Atlas SRV for the source (`retail-stock-take`) DB |
+| `PS_MONGO_URI` | from secret | Atlas SRV for the PowerSync bucket (`rs-powersync`) DB |
 | `POWERSYNC_CONFIG_PATH` | `/config/powersync.yaml` | Mounted from `powersync-config` ConfigMap |
 
 ---
@@ -231,9 +272,9 @@ kubectl -n industrysolutions rollout restart deploy/retail-stock-take-powersync-
 ### Rotating Atlas credentials
 
 1. Update the Atlas user password.
-2. Update the `retail-stock-take-secrets` secret:
+2. Update the `retail-stock-take` secret:
    ```bash
-   kubectl -n industrysolutions create secret generic retail-stock-take-secrets \
+   kubectl -n industrysolutions create secret generic retail-stock-take \
      --from-literal=MONGODB_URI="mongodb+srv://app:<NEW_PASSWORD>@..." \
      --from-literal=PS_DATA_SOURCE_URI="..." \
      --from-literal=PS_MONGO_URI="..." \
@@ -245,11 +286,17 @@ kubectl -n industrysolutions rollout restart deploy/retail-stock-take-powersync-
 
 ## Known limitations
 
-- **No CV / photo capture in cloud.** The backend's `OLLAMA_BASE_URL` points to
-  `localhost:11434` which is a dead endpoint in cloud. The capture endpoint returns
-  503. Storage, sync, vector search, and the inventory UI all work. A cloud CV
-  provider (e.g. Bedrock) must be wired to enable capture in cloud — tracked as a
-  Phase 2 item.
+- **No photo store in cloud (for now).** `STORAGE_PROVIDER=none`, so capture
+  runs CV + writes inventory metadata + syncs via PowerSync, but the raw frame
+  is **not** persisted (`doc.asset` is null). No AWS S3 bucket / IRSA is
+  required. Re-enable object storage by creating the buckets + IRSA S3
+  permissions and setting `STORAGE_PROVIDER=s3` + `STORAGE_BUCKET` (see
+  Prerequisites §2). The retention reconciler runs but has no objects to expire
+  while disabled.
+- **Cloud CV depends on a valid Grove key.** If `GROVE_API_KEY` is missing or
+  the model isn't provisioned, capture returns 503 and `/api/health` shows the
+  `cv` field as `GROVE_API_KEY not set` (or the Grove error). Local capture is
+  unaffected (it uses Ollama).
 - **No `NEXT_PUBLIC_*` vars.** All runtime config (PowerSync URL, backend URL) is
   delivered at runtime via the Next.js proxy and `/api/auth/token`. Do not bake
   env vars into the image at build time.
@@ -274,7 +321,7 @@ kubectl -n industrysolutions logs deploy/retail-stock-take-backend-web-app --pre
 ```
 
 Common causes:
-- `retail-stock-take-secrets` Secret missing or has wrong key names.
+- `retail-stock-take` Secret missing or has wrong key names.
 - `jwt-keys` Secret missing.
 - Atlas connection string wrong (typo in SRV, password special chars not URL-encoded).
 - `changeStreamPreAndPostImages` not enabled on Atlas — the backend asserts this at startup.

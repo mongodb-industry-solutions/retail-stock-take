@@ -6,6 +6,7 @@ can be added without touching business logic.
 
 Local (SeaweedFS):  STORAGE_ENDPOINT + STORAGE_ACCESS_KEY/SECRET_KEY + STORAGE_FORCE_PATH_STYLE=true
 Cloud (AWS S3):     omit endpoint + keys (IRSA via the default credential chain); set AWS_REGION + STORAGE_BUCKET
+No photo store:     STORAGE_PROVIDER=none — capture keeps metadata only (no asset); see api/inventory.py
 """
 from __future__ import annotations
 
@@ -15,11 +16,16 @@ import os
 from .base import ObjectStat, StorageAdapter
 from .s3 import S3StorageAdapter
 
-__all__ = ["StorageAdapter", "ObjectStat", "get_storage_adapter"]
+__all__ = ["StorageAdapter", "ObjectStat", "get_storage_adapter", "storage_enabled"]
 
 
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def storage_enabled() -> bool:
+    """False when the photo store is disabled (STORAGE_PROVIDER=none)."""
+    return os.environ.get("STORAGE_PROVIDER", "s3").strip().lower() != "none"
 
 
 @functools.lru_cache(maxsize=1)

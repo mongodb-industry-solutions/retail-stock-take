@@ -7,17 +7,15 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from cv.ollama_client import OllamaError, analyze_shelf_image
+from cv import CV_FALLBACK, CV_MODEL, CVError, analyze_shelf_image
 from db.mdb import MongoDBConnector
-from storage import get_storage_adapter
+from storage import get_storage_adapter, storage_enabled
 
 log = logging.getLogger("inventory")
 router = APIRouter()
 
 _collection = os.environ.get("APP_COLLECTION", "inventory_captures")
 _max_bytes = int(os.environ.get("MAX_UPLOAD_BYTES", "10485760"))
-_model = os.environ.get("OLLAMA_MODEL", "qwen2.5vl:7b")
-_fallback = os.environ.get("OLLAMA_FALLBACK_MODEL", "moondream")
 _retention_days = int(os.environ.get("RETENTION_DAYS", "7"))
 _retention_class = os.environ.get("RETENTION_CLASS", "standard")
 
@@ -49,14 +47,33 @@ async def capture(
     )
 
     try:
-        result, used_model = await analyze_shelf_image(payload, _model, _fallback)
-    except OllamaError as e:
+        result, used_model = await analyze_shelf_image(payload, CV_MODEL, CV_FALLBACK)
+    except CVError as e:
         log.warning("cv failed: %s", e)
         raise HTTPException(503, f"computer vision unavailable: {e}") from e
 
     capture_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     content_type = photo.content_type or "image/jpeg"
+
+    # No photo store (e.g. cloud with STORAGE_PROVIDER=none): persist the
+    # inventory metadata only, straight to ACTIVE with no asset. CV + Mongo +
+    # PowerSync sync all still work; only the raw frame is not retained.
+    if not storage_enabled():
+        doc = {
+            "_id": capture_id,
+            "captured_at": now.isoformat(),
+            "device_id": device_id,
+            "operator_id": operator_id,
+            "store_id": store_id,
+            "cv_model": used_model,
+            "items": [item.model_dump() for item in result.items],
+            "status": "ACTIVE",
+            "asset": None,
+        }
+        MongoDBConnector().insert_one(_collection, doc)
+        return doc
+
     ext = _EXT_BY_TYPE.get(content_type, "jpg")
     adapter = get_storage_adapter()
     key = _raw_key(store_id, device_id, capture_id, ext, now)

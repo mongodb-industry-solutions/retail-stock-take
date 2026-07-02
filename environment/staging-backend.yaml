@@ -1,9 +1,12 @@
 # Backend (staging). Loaded after environment/staging.yaml by the Drone deploy.
 # Create in the namespace first:
-#   - secret retail-stock-take-secrets : key MONGODB_URI (Atlas SRV string)
+#   - secret retail-stock-take : keys MONGODB_URI (Atlas SRV string)
+#       + GROVE_API_KEY (Grove gateway key — see INTERNAL_DEPLOY_MAINTENANCE.md)
 #   - secret jwt-keys : files jwt-private.pem + jwt-public.pem
-# Backend has NO ingress (the Drone step omits ingress.enabled); it is reached
-# via the frontend /api proxy and by PowerSync (JWKS) over the in-cluster Service.
+# No S3 bucket / S3 IRSA needed: the photo store is disabled in cloud for now
+# (STORAGE_PROVIDER=none). Backend has NO ingress (the Drone step omits
+# ingress.enabled); it is reached via the frontend /api proxy and by PowerSync
+# (JWKS) over the in-cluster Service.
 services:
   - name: http
     port: 80
@@ -14,12 +17,14 @@ probes:
   enabled: true
   path: /api/health
 env:
-  DATABASE_NAME: retail_demo
+  DATABASE_NAME: retail-stock-take
   APP_NAME: retail-stock-take-backend
   APP_COLLECTION: inventory_captures
-  STORAGE_PROVIDER: s3
-  STORAGE_BUCKET: retail-stock-take-media-staging
-  STORAGE_FORCE_PATH_STYLE: "false"   # AWS S3 virtual-host addressing; IRSA creds
+  # Photo store disabled in cloud for now — capture keeps inventory metadata
+  # only (no raw frame; doc.asset is null). CV + MongoDB + PowerSync sync all
+  # work. Re-enable later by setting STORAGE_PROVIDER=s3 + STORAGE_BUCKET and
+  # granting the IRSA role S3 permissions.
+  STORAGE_PROVIDER: none
   RETENTION_DAYS: "7"
   RECONCILER_INTERVAL_SECONDS: "300"
   JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
@@ -30,12 +35,16 @@ env:
   PS_JWT_ISSUER: retail-stock-take
   POWERSYNC_PUBLIC_URL: https://retail-stock-take-powersync.industrysolutions.staging.corp.mongodb.com
   POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
-  # CV (Ollama) is local-only — no Ollama in cloud. Capture's CV step will 503
-  # until a cloud provider (e.g. Bedrock) is wired; storage + sync + vector
-  # search work regardless. (Known limitation — see docs/architecture.md.)
-  OLLAMA_BASE_URL: http://localhost:11434
+  # Cloud CV via Grove (MongoDB's GenAI gateway — OpenAI-compatible + vision).
+  # Base URL + model default to the current best; override to match whatever
+  # your Grove request provisioned. GROVE_API_KEY comes from the secret below.
+  CV_PROVIDER: grove
+  GROVE_BASE_URL: https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1
+  GROVE_MODEL: gpt-5.5
+  GROVE_FALLBACK_MODEL: gpt-4o
 envSecrets:
-  MONGODB_URI: retail-stock-take-secrets
+  MONGODB_URI: retail-stock-take
+  GROVE_API_KEY: retail-stock-take
 volumeSecrets:
   - name: jwt-keys
     path: /secrets

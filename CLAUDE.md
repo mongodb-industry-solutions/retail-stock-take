@@ -67,14 +67,20 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   `infra/k8s/access/` (+ seaweedfs.yaml). Mappings are fixed at cluster creation, so
   changing them needs `make reset && make setup`. Compass uses `directConnection=true`
   against pinned pod `retail-mongodb-0`.
-- Cloud MongoDB = **Atlas**; cloud storage = **AWS S3** (IRSA).
+- Cloud MongoDB = **Atlas**. Cloud object storage = **AWS S3** (IRSA) **when
+  enabled** — but the **cloud photo store is currently OFF**
+  (`STORAGE_PROVIDER=none`), so no S3 bucket/IRSA is needed to deploy. Local
+  always uses SeaweedFS (photos on).
 - **Object storage is vendor-agnostic** behind one `boto3` S3 adapter
   (`backend/storage/`). Use only the common S3 subset (Put/Get/Head/Delete/
   ListV2 + presign). **Never** depend on SeaweedFS-/MinIO-native or admin APIs.
   Local = SeaweedFS endpoint + path-style + static keys; cloud = AWS S3 + IRSA.
-- **Photos are persisted** (this reverses the old "ephemeral" rule). MongoDB
-  stores metadata + an `asset` reference; the bytes live in object storage.
-  Raw frames only for now; `crops/` keys are reserved for a future detection pass.
+  `STORAGE_PROVIDER=none` disables the store entirely (`storage_enabled()` gates
+  capture/reconciler/health/startup; capture then writes `asset: null`, ACTIVE).
+- **Photos are persisted when storage is on** (reverses the old "ephemeral"
+  rule). MongoDB stores metadata + an `asset` reference; the bytes live in
+  object storage. With `STORAGE_PROVIDER=none` the frame is not stored and
+  `asset` is null. `crops/` keys are reserved for a future detection pass.
 - **Idempotent write FSM**: `PENDING_UPLOAD → ACTIVE → DELETED`. Retention is
   enforced by a **reconciler** (`backend/retention/`), NOT by bucket lifecycle.
 - Same Mongo cluster for source + PowerSync bucket storage, **distinct DBs**:
@@ -92,8 +98,13 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
 - Web app is a real PowerSync client; it does NOT write via the SDK upload queue
   (photo uploads go to `/api/inventory/capture`).
 - MongoDB documents: `_id` is a UUID **string** (not ObjectId).
-- **Cloud has no Ollama** — capture's CV step is local-only until a cloud CV
-  provider (e.g. Bedrock) is wired. Storage + sync + vector search work in cloud.
+- **CV provider is config-selected** via `CV_PROVIDER` (`backend/cv/__init__.py`):
+  local = **Ollama** (in-cluster), cloud = **Grove** (MongoDB's GenAI gateway —
+  OpenAI-compatible + vision, `api-key` header). Both share the
+  `analyze_shelf_image(bytes, model, fallback) -> (CVResponse, str)` contract and
+  a unified `CVError`. Cloud default `GROVE_MODEL=gpt-5.5`, fallback `gpt-4o`
+  (env-overridable); `GROVE_API_KEY` from `retail-stock-take`. Add a new
+  provider = new `cv/<name>_client.py` + a branch in `cv/__init__.py`.
 
 ## Tech stack (pinned)
 

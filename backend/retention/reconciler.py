@@ -23,7 +23,7 @@ import os
 from datetime import datetime, timezone
 
 from db.mdb import MongoDBConnector
-from storage import get_storage_adapter
+from storage import get_storage_adapter, storage_enabled
 
 log = logging.getLogger("reconciler")
 
@@ -49,7 +49,11 @@ def _parse(value) -> datetime | None:
 def run_once() -> dict:
     """One reconciliation pass. Returns counts. Safe to call repeatedly."""
     mdb = MongoDBConnector()
-    adapter = get_storage_adapter()
+    # When the photo store is disabled (STORAGE_PROVIDER=none), docs carry no
+    # asset — there are no objects to head/promote/delete, so skip the adapter
+    # entirely. Doc-level expiry below still runs and syncs DELETED to clients.
+    enabled = storage_enabled()
+    adapter = get_storage_adapter() if enabled else None
     now = _now()
     promoted = abandoned = expired = 0
 
@@ -57,7 +61,7 @@ def run_once() -> dict:
     for doc in mdb.find(_collection, {"status": "PENDING_UPLOAD"}):
         asset = doc.get("asset") or {}
         key = asset.get("key")
-        if not key:
+        if not key or adapter is None:
             continue
         stat = adapter.head_object(key)
         if stat is not None:
@@ -78,7 +82,7 @@ def run_once() -> dict:
     expired_query = {"status": "ACTIVE", "asset.expires_at": {"$lte": now.isoformat()}}
     for doc in mdb.find(_collection, expired_query):
         key = (doc.get("asset") or {}).get("key")
-        if key:
+        if key and adapter is not None:
             try:
                 adapter.delete_object(key)
             except Exception as e:  # noqa: BLE001
