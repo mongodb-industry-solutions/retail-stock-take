@@ -1,0 +1,36 @@
+# Always-on host access to MongoDB for Compass / mongosh.
+#
+# The MCK operator owns `retail-mongodb-svc` (a headless Service used for
+# in-cluster replica-set discovery) — we must NOT modify it. Instead we add this
+# SEPARATE NodePort Service that selects a single replica-set pod.
+#
+# Why pin to retail-mongodb-0 specifically (statefulset.kubernetes.io/pod-name)?
+#   A replica-set connection string advertises members by their in-cluster DNS
+#   names (retail-mongodb-N.retail-mongodb-svc.mongodb.svc.cluster.local), which
+#   don't resolve from your laptop. So host clients connect with
+#   `directConnection=true` to ONE node. Pinning the NodePort to pod-0 gives a
+#   stable single endpoint (and the local RS is single-member, so pod-0 is the
+#   primary — reads AND writes work).
+#
+# Host wiring: kind maps host :27017 -> nodePort 30017 (see infra/k8s/kind-cluster.yaml).
+# Connect with:  mongodb://admin:<pw>@localhost:27017/?authSource=admin&directConnection=true
+apiVersion: v1
+kind: Service
+metadata:
+  name: retail-mongodb-ext
+  namespace: mongodb
+  labels:
+    app: retail-mongodb-ext
+    part-of: retail-stock-take-access
+spec:
+  type: NodePort
+  selector:
+    # Pin to the first (and, locally, only) replica-set member for a stable,
+    # directConnection-friendly endpoint.
+    statefulset.kubernetes.io/pod-name: retail-mongodb-0
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+      nodePort: 30017
+      protocol: TCP

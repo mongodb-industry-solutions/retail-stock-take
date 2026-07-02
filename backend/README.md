@@ -1,71 +1,57 @@
-# Demo Template: Python Backend
+# Backend — retail-stock-take API
 
-Python backend section built using [FastAPI](https://fastapi.tiangolo.com/). The backend is managed using uv for dependency management, offering a RESTful API.
+FastAPI + Python 3.13 (managed with [`uv`](https://docs.astral.sh/uv/)). It runs
+the CV pipeline, owns the idempotent write path to MongoDB + object storage, issues
+the JWTs PowerSync trusts, and runs the retention reconciler.
 
-## Table of Contents
+It is **internal-only**: the browser never calls it directly — it's reached through
+the frontend's same-origin `/api/*` proxy and over in-cluster DNS (PowerSync →
+JWKS). For the project overview see [`../README.md`](../README.md); to run the
+whole stack locally see [`../RUN_LOCAL.md`](../RUN_LOCAL.md).
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-  - [Backend Setup](#backend-setup)
-- [Running the Application](#running-the-application)
-- [API Documentation](#api-documentation)
-- [Contributing](#contributing)
-- [License](#license)
+## Structure
 
-## Features
+```
+api/         routes — auth (token/keys), health, inventory capture
+cv/          Ollama client + strict-JSON prompt (qwen2.5vl:7b, moondream fallback)
+db/          mdb.py (Mongo connector) + bootstrap.py (startup assertions)
+storage/     vendor-agnostic S3 adapter — get_storage_adapter() (boto3; common S3 subset)
+retention/   reconciler (promotes/expires docs, deletes objects past expires_at)
+main.py      app wiring + startup hooks
+```
 
-- Python backend with a RESTful API powered by FastAPI
-- Dependency management with uv ([More info](https://docs.astral.sh/uv/))
-- Easy setup and configuration
+## What it does
 
-## Prerequisites
+- **Capture FSM (idempotent, retry-safe):** `POST /api/inventory/capture` →
+  CV (Ollama) → insert doc `status=PENDING_UPLOAD` with an embedded `asset` ref +
+  deterministic key → `put_object` to S3 → update `status=ACTIVE` (+size+checksum)
+  → `201`. The MongoDB change stream then drives PowerSync. The reconciler cleans
+  up stuck/expired records — retention is **not** done via bucket lifecycle.
+- **Storage is vendor-agnostic.** All object I/O goes through
+  `storage/get_storage_adapter()`; local = SeaweedFS endpoint + path-style + static
+  keys, cloud = AWS S3 via IRSA. Business logic never touches provider-native APIs.
+- **Auth:** RS256 JWTs via JWKS. `/api/auth/token` returns a short-lived token
+  (`aud=powersync`, `iss=retail-stock-take`) plus the PowerSync URL;
+  `/api/auth/keys` serves the public JWKS that PowerSync validates against.
+- **Startup assertions** (`db/bootstrap.py`): refuses to start unless the source
+  collection has `changeStreamPreAndPostImages` enabled (otherwise PowerSync would
+  silently miss update/delete events).
 
-Before you begin, ensure you have met the following requirements:
+## Config
 
-- Python 3.13 (but less than 3.14)
-- uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
+Env-driven; the contract is documented in the root `.env.example`. Local cluster
+values live in `deploy/local/backend.yaml`, cloud values in `environment/*.yaml`.
 
-For complete setup instructions, including how to create a new repository and clone it, please refer to the [parent README](../README.md).
+## Local dev
 
-## Getting Started
+Normally the backend runs **inside the kind cluster** via `./scripts/setup.sh`
+(builds `Dockerfile.backend`). To iterate on it directly:
 
-Follow these steps to set up the backend project locally. For detailed instructions on creating a new repository and using GitHub Desktop, please refer to the [parent README](../README.md).
+```bash
+make uv_sync                 # install deps into backend/.venv
+cd backend
+uv run uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-### Backend Setup
-
-1. (Optional) Set your project description and author information in the `pyproject.toml` file:
-   ```toml
-   description = "Your Description"
-   authors = ["Your Name <you@example.com>"]
-2. Open the project in your preferred IDE (the standard for the team is Visual Studio Code).
-3. Open the Terminal within Visual Studio Code.
-4. Ensure you are in the root project directory where the `makefile` is located.
-5. Execute the following commands:
-  - uv initialization
-    ````bash
-    make uv_init
-    ````
-  - uv sync
-    ````bash
-    make uv_sync
-    ````
-6. Verify that the `.venv` folder has been generated within the `/backend` directory.
-
-## Running the Application
-
-After setting up the backend dependencies, you can run the development server:
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Start the FastAPI development server:
-   ```bash
-   uv run uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
-
-3. The backend API will be accessible at http://localhost:8000
-
-**Note**: If port 8000 is already in use (e.g., by Docker containers), either stop the containers with `make clean` or use a different port like `--port 8001`.
+It needs `MONGODB_URI`, the JWT key paths, and `STORAGE_*` / `OLLAMA_*` env set —
+see `deploy/local/backend.yaml` for the full list.

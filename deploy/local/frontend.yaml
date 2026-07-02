@@ -1,0 +1,41 @@
+# Local kind values for the Next.js frontend (mongodb/web-app chart).
+#   helm upgrade --install retail-stock-take-frontend mongodb/web-app \
+#     -n retail -f deploy/local/frontend.yaml
+#
+# Browser reaches this via infra/k8s/ingress (http://frontend.localtest.me).
+# The chart Service is named retail-stock-take-frontend-web-app:80.
+image:
+  repository: retail-stock-take-frontend
+  tag: local
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# kind on Apple Silicon is arm64; the chart's default is amd64.
+arch: arm64
+
+services:
+  - name: http
+    ingress: false          # we use the standalone Ingress in infra/k8s/ingress
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+    probes: true
+    type: ClusterIP
+
+probes:
+  enabled: true
+  path: /
+
+env:
+  # Server-side proxy target (next.config.mjs rewrites /api/* -> here at runtime).
+  BACKEND_URL: http://retail-stock-take-backend-web-app-80
+  NODE_ENV: production
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: 256Mi
+  limits:
+    cpu: "1000m"
+    memory: 512Mi

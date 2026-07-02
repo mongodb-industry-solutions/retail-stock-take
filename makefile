@@ -1,14 +1,24 @@
-build:
-	docker-compose up --build -d
+.PHONY: setup verify reset status logs install_uv uv_init uv_sync uv_update
 
-start: 
-	docker-compose start
+# Local stack runs on a kind (Kubernetes-in-Docker) cluster. See scripts/.
+KIND_CLUSTER ?= retail-stock-take
+NAMESPACE ?= retail
 
-stop:
-	docker-compose stop
+setup:
+	./scripts/setup.sh
 
-clean:
-	docker-compose down --rmi all -v
+verify:
+	./scripts/verify.sh
+
+reset:
+	./scripts/reset.sh
+
+status:
+	kubectl -n $(NAMESPACE) get pods,svc,ingress
+
+# Tail logs for all app pods (label set by the web-app chart values, W6).
+logs:
+	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/part-of=$(KIND_CLUSTER) --all-containers --tail=200 -f
 
 install_uv:
 	curl -LsSf https://astral.sh/uv/install.sh | sh

@@ -1,87 +1,53 @@
-# Next.js Frontend
+# Frontend — retail-stock-take web client
 
-## Prerequisites
+Next.js 15 (App Router, **JavaScript** — not TypeScript) + LeafyGreen + Tailwind 4.
+It's a real **PowerSync** web client: it renders shelf inventory from a local
+SQLite database that PowerSync keeps in sync with MongoDB, and it works offline.
 
-- Node.js 22 or higher
+For the project overview see [`../README.md`](../README.md); to run the whole
+stack locally see [`../RUN_LOCAL.md`](../RUN_LOCAL.md).
 
-## Getting Started 
+## How it fits together
 
-1. Install dependencies by running:
+- **PowerSync client.** The synced schema lives in
+  [`lib/powersync/schema.js`](lib/powersync/schema.js) — the single source of
+  truth (Phase 2 mobile re-shares it). The browser reads inventory from local
+  SQLite (`@journeyapps/wa-sqlite`) backed by **OPFS**, so reads survive offline.
+- **OPFS needs cross-origin isolation.** `next.config.mjs` sets
+  `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Embedder-Policy: require-corp`. Don't remove them or wa-sqlite
+  won't persist.
+- **Same-origin API proxy.** The browser only ever talks to the frontend origin.
+  `/api/*` is proxied to the backend by a **runtime Route Handler** at
+  [`app/api/[...path]/route.js`](app/api/[...path]/route.js), which reads
+  `BACKEND_URL` **at request time**. (We do *not* use `next.config.mjs` rewrites:
+  those bake the target at build time, which breaks the no-`NEXT_PUBLIC_*` rule
+  and the one-image-per-environment goal.) The PowerSync WebSocket URL is likewise
+  delivered at runtime by `/api/auth/token`.
+- **Writes don't use the PowerSync upload queue.** Photo capture POSTs multipart
+  to `POST /api/inventory/capture`; the backend runs CV, stores the frame, and
+  writes MongoDB. The change stream then syncs the new row back down.
+
+## Layout
+
+```
+app/                 App Router: layout.js, page.js, providers.js
+  api/[...path]/route.js   runtime proxy to BACKEND_URL
+components/          feature folders: capture/, inventory/, debug/ (+ sibling hooks)
+lib/powersync/       schema.js (AppSchema) + client setup
+```
+
+## Local dev
+
+Normally you run the frontend **inside the kind cluster** via `./scripts/setup.sh`
+(it builds `Dockerfile.frontend`, `output: 'standalone'`, and serves it behind the
+ingress at http://frontend.localtest.me).
+
+To iterate on the UI alone against an already-running backend:
+
 ```bash
 npm install
+BACKEND_URL=http://localhost:8000 npm run dev   # http://localhost:3000
 ```
-2. Start the frontend development server with:
-````bash
-npm run dev
-````
-3. The frontend will now be accessible at http://localhost:3000 by default, providing a user interface to interact with the image vector search demo.
 
-
-## Understanding Next.js
-
-### Routes
-
-In Next.js, routes are created inside the `app` directory. Here's a breakdown of how the routing works:
-
-#### API Routes
-
-- The `api` folder is used for creating API routes.
-- We have two example routes for demonstrating how API routes work:
-
-  - **GET request to MongoDB**:  
-    [http://localhost:3000/api/mongodb](http://localhost:3000/api/mongodb)
-
-  - **Basic test route**:  
-    [http://localhost:3000/api/test](http://localhost:3000/api/test)
-
-#### Dynamic Routes
-
-- If you create a new folder inside the `app` directory, a route will be automatically created based on the folder name.
-- For example, creating a folder called `example` will make it accessible at:
-  [http://localhost:3000/example](http://localhost:3000/example)
-
-Each route includes a `layout.js` and `page.js` to define the structure and content.
-
-#### Root Route
-
-- The global root route (home page) is accessible at:
-  [http://localhost:3000](http://localhost:3000)
-
-This page is managed by the `layout.js` and `page.js` inside the `app` directory.
-
-
-### Components
-
-Components are located outside the `app` folder, inside the `components` directory.
-
-There are two example components:
-
-1. **MongoDB Leafy Green System Design**: Demonstrates how to integrate MongoDB with your component.
-2. **Test Component**: Shows how to create a simple test component that includes both a `.jsx` file and a `.module.css` file for styling.
-
-#### CSS
-
-Each component should have its own dedicated CSS file. For styling, we recommend using CSS Modules (e.g., `component.module.css`) to scope styles locally to the component.
-
-#### Images
-
-For adding images, we use `Image` from `next/image`, which is provided by Next.js. This component optimizes images for caching and better performance.
-
-- Images should be stored in the `public` folder inside the `frontend` directory.
-- Next.js automatically handles these images, making them easily accessible.
-
-For an example, check out the `test.jsx` component.
-
-### MongoDB Connections
-
-This template includes a `lib` folder with a utility for connecting to MongoDB. 
-
-Inside the `lib` folder, you’ll find a function called `connectToDatabase`. To use it, simply import the function and pass the necessary parameters to specify which database and collection you want to connect to.
-
-The `connectToDatabase` function manages the connection and can be reused across your application for efficient MongoDB interactions.
-
-### .env.local
-
-Next.js natively supports `.env.local` files, so you don't need to install additional libraries like `dotenv`. Simply create a `.env.local` file, and Next.js will automatically detect and load it.
-
-Make sure to place the `.env.local` file inside the `frontend` folder for proper configuration.
+(You need the backend reachable at `BACKEND_URL` for `/api/*` and PowerSync to work.)

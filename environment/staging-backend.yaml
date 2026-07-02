@@ -1,0 +1,41 @@
+# Backend (staging). Loaded after environment/staging.yaml by the Drone deploy.
+# Create in the namespace first:
+#   - secret retail-stock-take-secrets : key MONGODB_URI (Atlas SRV string)
+#   - secret jwt-keys : files jwt-private.pem + jwt-public.pem
+# Backend has NO ingress (the Drone step omits ingress.enabled); it is reached
+# via the frontend /api proxy and by PowerSync (JWKS) over the in-cluster Service.
+services:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+    probes: true
+probes:
+  enabled: true
+  path: /api/health
+env:
+  DATABASE_NAME: retail_demo
+  APP_NAME: retail-stock-take-backend
+  APP_COLLECTION: inventory_captures
+  STORAGE_PROVIDER: s3
+  STORAGE_BUCKET: retail-stock-take-media-staging
+  STORAGE_FORCE_PATH_STYLE: "false"   # AWS S3 virtual-host addressing; IRSA creds
+  RETENTION_DAYS: "7"
+  RECONCILER_INTERVAL_SECONDS: "300"
+  JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
+  JWT_PUBLIC_KEY_PATH: /secrets/jwt-public.pem
+  JWT_KID: retail-key-1
+  JWT_ALGORITHM: RS256
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+  POWERSYNC_PUBLIC_URL: https://retail-stock-take-powersync.industrysolutions.staging.corp.mongodb.com
+  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
+  # CV (Ollama) is local-only — no Ollama in cloud. Capture's CV step will 503
+  # until a cloud provider (e.g. Bedrock) is wired; storage + sync + vector
+  # search work regardless. (Known limitation — see docs/architecture.md.)
+  OLLAMA_BASE_URL: http://localhost:11434
+envSecrets:
+  MONGODB_URI: retail-stock-take-secrets
+volumeSecrets:
+  - name: jwt-keys
+    path: /secrets

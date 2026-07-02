@@ -1,0 +1,84 @@
+# Local kind values for the backend, via the SAME mongodb/web-app chart used on
+# Kanopy (environment/*.yaml) — local<->cloud differ only by values/secrets.
+#   helm upgrade --install retail-stock-take-backend mongodb/web-app \
+#     -n retail -f deploy/local/backend.yaml
+#
+# Secrets scripts/setup.sh must create in the `retail` namespace first:
+#   - retail-mongodb-uri : key MONGODB_URI (SCRAM conn string for the app user)
+#   - jwt-keys           : files jwt-private.pem + jwt-public.pem
+# A `retaildemo`/`retaildemo-secret` SeaweedFS key pair is non-sensitive demo
+# data, so it stays in plain env.
+image:
+  repository: retail-stock-take-backend
+  tag: local
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# kind on Apple Silicon is arm64; the chart's default is amd64.
+arch: arm64
+
+# Backend is internal-only: reached via the frontend's same-origin /api proxy,
+# and by PowerSync (JWKS) over in-cluster DNS. No ingress.
+services:
+  - name: http
+    ingress: false
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+    probes: true
+    type: ClusterIP
+
+probes:
+  enabled: true
+  path: /api/health
+
+env:
+  DATABASE_NAME: retail_demo
+  APP_NAME: retail-stock-take-backend
+  APP_COLLECTION: inventory_captures
+  # object storage — SeaweedFS in-cluster (same code path as AWS S3)
+  STORAGE_PROVIDER: s3
+  STORAGE_BUCKET: store-media
+  STORAGE_REGION: us-east-1
+  STORAGE_ENDPOINT: http://seaweedfs:8333
+  STORAGE_ACCESS_KEY: retaildemo
+  STORAGE_SECRET_KEY: retaildemo-secret
+  STORAGE_FORCE_PATH_STYLE: "true"
+  # retention
+  RETENTION_DAYS: "7"
+  RETENTION_CLASS: standard
+  RECONCILER_INTERVAL_SECONDS: "300"
+  RECONCILER_PENDING_GRACE_SECONDS: "900"
+  # auth / JWT (keys mounted from the jwt-keys Secret below)
+  JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
+  JWT_PUBLIC_KEY_PATH: /secrets/jwt-public.pem
+  JWT_KID: retail-key-1
+  JWT_ALGORITHM: RS256
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+  # PowerSync URLs: public (browser, via Ingress) + internal (health probe)
+  POWERSYNC_PUBLIC_URL: http://powersync.localtest.me
+  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
+  # CV: Ollama runs in-cluster (infra/k8s/ollama/ollama.yaml).
+  # Moondream only — no fallback (qwen2.5vl:7b exceeds available CPU memory).
+  # 300s timeout covers cold-start model load on first capture.
+  OLLAMA_BASE_URL: http://ollama:11434
+  OLLAMA_MODEL: moondream
+  OLLAMA_FALLBACK_MODEL: ""
+  OLLAMA_REQUEST_TIMEOUT_SECONDS: "300"
+
+envSecrets:
+  MONGODB_URI: retail-mongodb-uri
+
+volumeSecrets:
+  - name: jwt-keys
+    path: /secrets
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: 256Mi
+  limits:
+    cpu: "1000m"
+    memory: 768Mi

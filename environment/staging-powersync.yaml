@@ -1,0 +1,37 @@
+# Self-hosted PowerSync (staging). Loaded after environment/staging.yaml.
+# Create in the namespace first:
+#   - configmap powersync-config : powersync/powersync.yaml + powersync/sync-rules.yaml
+#   - secret retail-stock-take-secrets : keys PS_DATA_SOURCE_URI + PS_MONGO_URI
+#       (Atlas SRV strings — source DB + bucket DB)
+# Public ingress (browser WebSocket) is set by the Drone deploy step.
+args: ["start", "-r", "unified"]
+services:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+    probes: true
+    ingress: true
+probes:
+  enabled: true
+  liveness:
+    path: /probes/liveness
+  readiness:
+    path: /probes/readiness
+env:
+  PS_PORT: "8080"
+  POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+  PS_JWKS_URL: http://retail-stock-take-backend-web-app-80/api/auth/keys
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+envSecrets:
+  PS_DATA_SOURCE_URI: retail-stock-take-secrets
+  PS_MONGO_URI: retail-stock-take-secrets
+extraVolumes:
+  - name: powersync-config
+    configMap:
+      name: powersync-config
+extraVolumeMounts:
+  - name: powersync-config
+    mountPath: /config
+    readOnly: true

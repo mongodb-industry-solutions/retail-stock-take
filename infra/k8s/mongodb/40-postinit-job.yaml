@@ -1,0 +1,43 @@
+# Post-init Job: ports the old rs-init.js logic to the kind stack.
+# Ensures the source collection exists WITH changeStreamPreAndPostImages enabled
+# (PowerSync replicates updates/deletes incorrectly without it — the backend
+# startup also asserts this). Idempotent; safe to re-run.
+#
+# Runs after the replica set is Running (scripts/setup.sh waits first).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retail-mongodb-postinit
+  namespace: mongodb
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mongosh
+          image: mongodb/mongodb-community-server:8.0-ubi9
+          env:
+            - name: MONGO_PASS
+              valueFrom:
+                secretKeyRef:
+                  # MCK writes the actual credentials to this auto-generated secret
+                  # (pattern: <rs-name>-<mongodbuser-name>-<db>)
+                  name: retail-mongodb-retail-admin-admin
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              URI="mongodb://admin:${MONGO_PASS}@retail-mongodb-svc.mongodb.svc.cluster.local:27017/?authSource=admin&replicaSet=retail-mongodb"
+              mongosh "$URI" --quiet --eval '
+                const db = db.getSiblingDB("retail_demo");
+                try {
+                  db.createCollection("inventory_captures", { changeStreamPreAndPostImages: { enabled: true } });
+                } catch (e) {
+                  if (e.codeName !== "NamespaceExists") throw e;
+                }
+                db.runCommand({ collMod: "inventory_captures", changeStreamPreAndPostImages: { enabled: true } });
+                print("inventory_captures ready with changeStreamPreAndPostImages");
+              '

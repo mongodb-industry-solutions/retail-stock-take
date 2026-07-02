@@ -1,0 +1,33 @@
+# Backend (production). Loaded after environment/production.yaml.
+services:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+    probes: true
+probes:
+  enabled: true
+  path: /api/health
+env:
+  DATABASE_NAME: retail_demo
+  APP_NAME: retail-stock-take-backend
+  APP_COLLECTION: inventory_captures
+  STORAGE_PROVIDER: s3
+  STORAGE_BUCKET: retail-stock-take-media-prod
+  STORAGE_FORCE_PATH_STYLE: "false"
+  RETENTION_DAYS: "30"
+  RECONCILER_INTERVAL_SECONDS: "300"
+  JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
+  JWT_PUBLIC_KEY_PATH: /secrets/jwt-public.pem
+  JWT_KID: retail-key-1
+  JWT_ALGORITHM: RS256
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+  POWERSYNC_PUBLIC_URL: https://retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com
+  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
+  OLLAMA_BASE_URL: http://localhost:11434   # CV is local-only (see docs)
+envSecrets:
+  MONGODB_URI: retail-stock-take-secrets
+volumeSecrets:
+  - name: jwt-keys
+    path: /secrets

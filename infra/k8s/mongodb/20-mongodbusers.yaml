@@ -1,0 +1,73 @@
+# SCRAM users for the Enterprise replica set (managed via MongoDBUser CRs).
+#
+# Password Secrets (mongodb-*-password) are NOT committed — scripts/setup.sh
+# generates them with random values before applying this file:
+#   kubectl -n mongodb create secret generic mongodb-app-password \
+#     --from-literal=password=$(openssl rand -base64 24)   (etc.)
+#
+# For each user the operator also publishes a connection-string Secret the apps
+# consume (name pattern is operator-generated, e.g. retail-mongodb-<user>-<db>);
+# the exact name must be confirmed on the live cluster and wired in deploy/local.
+#
+# PREVIEW / VERSION-SENSITIVE: confirm `spec.mongodbResourceRef` is the correct
+# field on the installed MongoDBUser CRD (`kubectl explain mongodbuser.spec`).
+---
+apiVersion: mongodb.com/v1
+kind: MongoDBUser
+metadata:
+  name: retail-admin
+  namespace: mongodb
+spec:
+  username: admin
+  db: admin
+  mongodbResourceRef:
+    name: retail-mongodb
+  passwordSecretKeyRef:
+    name: mongodb-admin-password
+    key: password
+  roles:
+    - name: root
+      db: admin
+---
+apiVersion: mongodb.com/v1
+kind: MongoDBUser
+metadata:
+  name: retail-app
+  namespace: mongodb
+spec:
+  username: app
+  db: admin
+  mongodbResourceRef:
+    name: retail-mongodb
+  passwordSecretKeyRef:
+    name: mongodb-app-password
+    key: password
+  roles:
+    - name: readWrite
+      db: retail_demo
+---
+# PowerSync replication user: read the source DB, read/write its bucket DB, and
+# monitor the cluster (open change streams / read rs status). Broad-but-simple
+# for a demo; tighten for production.
+apiVersion: mongodb.com/v1
+kind: MongoDBUser
+metadata:
+  name: retail-powersync
+  namespace: mongodb
+spec:
+  username: powersync
+  db: admin
+  mongodbResourceRef:
+    name: retail-mongodb
+  passwordSecretKeyRef:
+    name: mongodb-powersync-password
+    key: password
+  roles:
+    - name: readWrite
+      db: powersync
+    - name: readWrite
+      db: retail_demo
+    - name: clusterMonitor
+      db: admin
+# NOTE: retail-search user (searchCoordinator role) requires MongoDB 8.2+.
+# Omitted until Ops Manager is upgraded to support 8.2.x.

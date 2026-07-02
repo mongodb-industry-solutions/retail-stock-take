@@ -1,16 +1,16 @@
-import "./globals.css";
-import { Providers } from "./providers";
+import './globals.css';
+import { Providers } from './providers';
 
-// TODO: Update metadata with actual demo details
 export const metadata = {
-  title: "Demo Template",
-  description: "Industry Solutions Demo Template for NextJS",
+  title: 'Retail Stock Take — MongoDB + PowerSync',
+  description:
+    'Offline-first retail inventory demo. MongoDB Enterprise + PowerSync self-hosted + local CV via Ollama.',
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="h-full antialiased">
+      <body className="min-h-full" style={{ backgroundColor: 'var(--mdb-bg)' }}>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -238,3 +238,14 @@ frontend/next-env.d.ts
 
 # Misc
 *.pem
+
+# Local test / demo assets — kept on disk for local runs, never committed.
+# Ad-hoc shelf photos dropped into the repo root for testing:
+/RETAIL SHELFS/
+# scripts/sample-photos/ is documented as "empty by default" (see its README);
+# ignore any photos placed there but keep the README itself.
+scripts/sample-photos/*
+!scripts/sample-photos/README.md
+
+# macOS
+.DS_Store
