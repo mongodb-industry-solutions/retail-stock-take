@@ -50,7 +50,7 @@ def ensure_collection_ready() -> None:
             log.error(msg)
             raise RuntimeError(msg)
 
-    opts = infos[0].get("options", {}) if infos else {}
+    opts = infos[0].get("options", {})
     pre_post = opts.get("changeStreamPreAndPostImages") or {}
     if pre_post.get("enabled"):
         log.info("collection %s.%s ready (pre/post images enabled)", mdb.database_name, coll_name)
