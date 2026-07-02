@@ -60,8 +60,15 @@ def ensure_collection_ready() -> None:
     try:
         mdb.db.command({"collMod": coll_name, "changeStreamPreAndPostImages": {"enabled": True}})
     except OperationFailure as e:
-        log.warning(
-            "could not enable changeStreamPreAndPostImages on %s.%s (%s). collMod needs "
-            "dbAdmin; enable it with an admin user, or rely on PowerSync post_images: "
-            "auto_configure.", mdb.database_name, coll_name, e,
-        )
+        if getattr(e, "code", None) == 13:  # Unauthorized
+            log.warning(
+                "could not enable changeStreamPreAndPostImages on %s.%s (%s). collMod needs "
+                "dbAdmin; enable it with an admin user, or rely on PowerSync post_images: "
+                "auto_configure.",
+                mdb.database_name,
+                coll_name,
+                e,
+            )
+            return
+        log.error("failed to enable changeStreamPreAndPostImages on %s.%s: %s", mdb.database_name, coll_name, e)
+        raise
