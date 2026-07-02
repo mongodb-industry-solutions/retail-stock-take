@@ -1,0 +1,253 @@
+---
+# retail-stock-take — Kanopy deploy (separate pods).
+# Three releases via the mongodb/web-app chart:
+#   backend  (FastAPI)   — internal only (no ingress); reached via frontend proxy + PS JWKS
+#   frontend (Next.js)   — public ingress (the app)
+#   powersync            — public ingress (browser WebSocket); upstream image, no build
+#
+# Prereqs (see KANOPY_DEPLOYMENT_README.md + docs/architecture.md):
+#   - Drone secrets: ecr_access_key, ecr_secret_key, staging/prod kubernetes tokens
+#   - k8s secret  retail-stock-take : MONGODB_URI, PS_DATA_SOURCE_URI, PS_MONGO_URI (Atlas SRV),
+#                                             GROVE_API_KEY (Grove gateway key for cloud CV)
+#   - k8s secret  jwt-keys                  : jwt-private.pem + jwt-public.pem
+#   - k8s configmap powersync-config        : powersync.yaml + sync-rules.yaml
+# Cloud CV uses Grove (OpenAI-compatible VLM gateway). No AWS S3 bucket/IRSA
+# needed: the photo store is disabled in cloud (STORAGE_PROVIDER=none).
+kind: pipeline
+type: kubernetes
+name: staging
+
+trigger:
+  branch:
+    - staging
+  event:
+    - push
+
+steps:
+  - name: publish-backend
+    image: plugins/kaniko-ecr
+    settings:
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/retail-stock-take-backend
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      dockerfile: Dockerfile.backend
+      context: .
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+
+  - name: publish-frontend
+    image: plugins/kaniko-ecr
+    settings:
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/retail-stock-take-frontend
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - latest
+      dockerfile: Dockerfile.frontend
+      context: .
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+
+  - name: deploy-backend-staging
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-backend
+      values_files:
+        - environment/staging.yaml
+        - environment/staging-backend.yaml
+      values:
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/retail-stock-take-backend"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=750m"
+        - "resources.limits.memory=768Mi"
+        - "resources.requests.cpu=100m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.staging.corp.mongodb.com
+      kubernetes_token:
+        from_secret: staging_kubernetes_token
+
+  - name: deploy-frontend-staging
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-frontend
+      values_files:
+        - environment/staging.yaml
+        - environment/staging-frontend.yaml
+      values:
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/retail-stock-take-frontend"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=retail-stock-take-frontend.industrysolutions.staging.corp.mongodb.com"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=750m"
+        - "resources.limits.memory=512Mi"
+        - "resources.requests.cpu=100m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.staging.corp.mongodb.com
+      kubernetes_token:
+        from_secret: staging_kubernetes_token
+
+  - name: deploy-powersync-staging
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-powersync
+      values_files:
+        - environment/staging.yaml
+        - environment/staging-powersync.yaml
+      values:
+        - "image.repository=journeyapps/powersync-service"
+        - "image.tag=1.21.0"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=retail-stock-take-powersync.industrysolutions.staging.corp.mongodb.com"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=1000m"
+        - "resources.limits.memory=768Mi"
+        - "resources.requests.cpu=100m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.staging.corp.mongodb.com
+      kubernetes_token:
+        from_secret: staging_kubernetes_token
+
+---
+kind: pipeline
+type: kubernetes
+name: production
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  - name: publish-backend-prod
+    image: plugins/kaniko-ecr
+    settings:
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/retail-stock-take-backend-prod
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - prod-latest
+      dockerfile: Dockerfile.backend
+      context: .
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+
+  - name: publish-frontend-prod
+    image: plugins/kaniko-ecr
+    settings:
+      create_repository: true
+      registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+      repo: industrysolutions/retail-stock-take-frontend-prod
+      tags:
+        - git-${DRONE_COMMIT_SHA:0:7}
+        - prod-latest
+      dockerfile: Dockerfile.frontend
+      context: .
+      access_key:
+        from_secret: ecr_access_key
+      secret_key:
+        from_secret: ecr_secret_key
+
+  - name: deploy-backend-production
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-backend-prod
+      values_files:
+        - environment/production.yaml
+        - environment/production-backend.yaml
+      values:
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/retail-stock-take-backend-prod"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=750m"
+        - "resources.limits.memory=768Mi"
+        - "resources.requests.cpu=150m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.prod.corp.mongodb.com
+      kubernetes_token:
+        from_secret: prod_kubernetes_token
+
+  - name: deploy-frontend-production
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-frontend-prod
+      values_files:
+        - environment/production.yaml
+        - environment/production-frontend.yaml
+      values:
+        - "image.tag=git-${DRONE_COMMIT_SHA:0:7}"
+        - "image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/industrysolutions/retail-stock-take-frontend-prod"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=retail-stock-take-frontend.industrysolutions.prod.corp.mongodb.com"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=750m"
+        - "resources.limits.memory=512Mi"
+        - "resources.requests.cpu=150m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.prod.corp.mongodb.com
+      kubernetes_token:
+        from_secret: prod_kubernetes_token
+
+  - name: deploy-powersync-production
+    image: public.ecr.aws/kanopy/drone-helm:v3
+    settings:
+      chart: mongodb/web-app
+      chart_version: 4.30.0
+      add_repos:
+        - mongodb=https://10gen.github.io/helm-charts
+      namespace: industrysolutions
+      release: retail-stock-take-powersync-prod
+      values_files:
+        - environment/production.yaml
+        - environment/production-powersync.yaml
+      values:
+        - "image.repository=journeyapps/powersync-service"
+        - "image.tag=1.21.0"
+        - "ingress.enabled=true"
+        - "ingress.hosts[0]=retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com"
+        - "mesh.enabled=true"
+        - "resources.limits.cpu=1000m"
+        - "resources.limits.memory=768Mi"
+        - "resources.requests.cpu=150m"
+        - "resources.requests.memory=256Mi"
+      api_server: https://api.prod.corp.mongodb.com
+      kubernetes_token:
+        from_secret: prod_kubernetes_token

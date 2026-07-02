@@ -1,0 +1,72 @@
+# Local kind values for the self-hosted PowerSync service (mongodb/web-app chart).
+#   helm upgrade --install retail-stock-take-powersync mongodb/web-app \
+#     -n retail -f deploy/local/powersync.yaml
+#
+# scripts/setup.sh must create first in the `retail` namespace:
+#   - configmap powersync-config : powersync/powersync.yaml + powersync/sync-rules.yaml
+#       kubectl -n retail create configmap powersync-config \
+#         --from-file=powersync.yaml=powersync/powersync.yaml \
+#         --from-file=sync-rules.yaml=powersync/sync-rules.yaml
+#   - secret retail-powersync-secrets : keys PS_DATA_SOURCE_URI + PS_MONGO_URI
+#       (SCRAM conn strings for the powersync user; source DB + bucket DB)
+#
+# Browser connects to the sync WebSocket via infra/k8s/ingress
+# (http://powersync.localtest.me); Service = retail-stock-take-powersync-web-app:80.
+image:
+  repository: journeyapps/powersync-service
+  tag: "1.21.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# kind on Apple Silicon is arm64; the chart's default is amd64.
+arch: arm64
+
+# PowerSync reads !env PS_* from powersync/powersync.yaml; loads the config dir.
+# Verify the start command/flags against the 1.21.0 image docs on first run.
+args: ["start", "-r", "unified"]
+
+services:
+  - name: http
+    ingress: false
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+    probes: true
+    type: ClusterIP
+
+probes:
+  enabled: true
+  liveness:
+    path: /probes/liveness
+  readiness:
+    path: /probes/readiness
+
+env:
+  PS_PORT: "8080"
+  POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+  PS_JWKS_URL: http://retail-stock-take-backend-web-app-80/api/auth/keys
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+
+envSecrets:
+  PS_DATA_SOURCE_URI: retail-powersync-secrets
+  PS_MONGO_URI: retail-powersync-secrets
+
+extraVolumes:
+  - name: powersync-config
+    configMap:
+      name: powersync-config
+
+extraVolumeMounts:
+  - name: powersync-config
+    mountPath: /config
+    readOnly: true
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: 256Mi
+  limits:
+    cpu: "1000m"
+    memory: 768Mi

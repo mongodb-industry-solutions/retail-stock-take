@@ -1,0 +1,58 @@
+# MongoDB Enterprise, single-node replica set, managed by the local Ops Manager.
+# The MCK operator + local Ops Manager (05-ops-manager.yaml) provision the mongod
+# pod IN this kind cluster — fully self-contained, no external cloud dependency.
+#
+# A single-node replica set is enough for change streams + changeStreamPreAndPostImages,
+# which PowerSync requires. version must be an Enterprise build (…-ent) >= 8.2 so
+# Search/Vector Search is supported.
+#
+# PREVIEW / VERSION-SENSITIVE: field names below follow MCK v1.8.x docs. Verify
+# against the CRDs actually installed (`kubectl explain mongodb.spec`) and adjust
+# the pinned `version` to one listed in your local Ops Manager's automation agent.
+apiVersion: mongodb.com/v1
+kind: MongoDB
+metadata:
+  name: retail-mongodb
+  namespace: mongodb
+spec:
+  members: 1
+  type: ReplicaSet
+  # NOTE: Ops Manager 8.0 manifest tops out at 8.0.x. MongoDB 8.2+ (needed for
+  # self-managed mongot Search) requires a newer Ops Manager. Use 8.0.9-ent for
+  # now — all demo functionality except Vector Search works on 8.0.
+  version: "8.0.9-ent"
+
+  # Local Ops Manager wiring.
+  # ops-manager-project ConfigMap and mongodb-ops-manager-admin-key Secret are both
+  # created by setup.sh after the MongoDBOpsManager CR reaches Running.
+  opsManager:
+    configMapRef:
+      name: ops-manager-project
+  credentials: mongodb-ops-manager-admin-key
+
+  persistent: true
+
+  security:
+    authentication:
+      enabled: true
+      modes: ["SCRAM"]
+
+  statefulSet:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: mongod
+              image: "quay.io/mongodb/mongodb-enterprise-server:8.0.9-ent"
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: 1.5Gi
+                limits:
+                  cpu: "1500m"
+                  memory: 2.5Gi
+
+  podSpec:
+    persistence:
+      single:
+        storage: 5Gi

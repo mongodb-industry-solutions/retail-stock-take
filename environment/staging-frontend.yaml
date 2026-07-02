@@ -1,0 +1,16 @@
+# Frontend (staging). Loaded after environment/staging.yaml.
+# Public ingress is set by the Drone deploy step (ingress.enabled + host).
+services:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+    probes: true
+    ingress: true
+probes:
+  enabled: true
+  path: /
+env:
+  NODE_ENV: production
+  # Server-side proxy target (next.config.mjs rewrites /api/* -> here at runtime).
+  BACKEND_URL: http://retail-stock-take-backend-web-app-80

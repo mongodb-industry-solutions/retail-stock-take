@@ -1,153 +1,112 @@
-# Demo Template: Python Backend with Next.js Frontend
+# Retail Stock Take — MongoDB ↔ PowerSync
 
-This repository provides a template for creating a web application with a Python backend and a Next.js frontend. The backend is managed using uv for dependency management, while the frontend is built with Next.js, offering a modern React-based user interface.
+A demo that shows MongoDB and PowerSync solving **disconnected environments** in
+retail field work.
 
-## Table of Contents
+A worker photographs a shelf. A computer-vision model turns it into a structured
+JSON inventory. MongoDB stores the inventory alongside a reference to the raw frame
+in object storage. PowerSync syncs everything to every connected client — including
+clients that go offline and come back.
 
-- [Demo Template: Python Backend with Next.js Frontend](#demo-template-python-backend-with-nextjs-frontend)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-  - [Getting Started](#getting-started)
-    - [Create a New Repository](#create-a-new-repository)
-    - [GitHub Desktop Setup](#github-desktop-setup)
-    - [Backend Setup](#backend-setup)
-  - [DEMO README](#demo-readme)
+## What it demonstrates
 
-## Features
+- **Change streams** with `changeStreamPreAndPostImages` drive PowerSync sync with
+  no custom triggers or polling.
+- The **document model** carries the nested `items` array from the CV model directly
+  into client-side SQLite.
+- **Metadata + blob plane**: MongoDB owns the metadata; S3-compatible object storage
+  owns the raw frames — the standard pattern for media-heavy workloads.
+- **Self-hosted Vector Search** (`mongot`) is wired via the MCK operator for
+  embedding shelf crops in a future phase (Preview — see note under Tech stack).
 
-- Python backend with a RESTful API powered by [FastAPI](https://fastapi.tiangolo.com/)
-- Next.js frontend for a responsive user interface
-- Dependency management with uv ([More info](https://docs.astral.sh/uv/))
-- Easy setup and configuration
+## Architecture
 
-## Prerequisites
-
-Before you begin, ensure you have met the following requirements:
-
-- Python >=3.13,<3.14 - If you are Mac user, you can install Python 3.13 using this [link](https://www.python.org/downloads/).
-- Node.js 22 or higher
-- uv (install via [uv's official documentation](https://docs.astral.sh/uv/getting-started/installation/))
-
-## Getting Started
-
-Follow these steps to set up the project locally.
-
-### Create a New Repository
-
-1. Navigate to the repository template on GitHub and click on **Use this template**.
-2. Create a new repository.
-3. **Do not** check the "Include all branches" option.
-4. Define a repository name following the naming convention: `<industry>-<project_name>-<highlighted_feature>`. For example, `fsi-leafybank-ai-personal-assistant` (use hyphens to separate words).
-   - The **industry** and **project name** are required; you can be creative with the highlighted feature.
-5. Provide a clear description for the repository, such as: "A repository template to easily create new demos by following the same structure."
-6. Set the visibility to **Internal**.
-7. Click **Create repository**.
-
-### GitHub Desktop Setup
-
-1. Install GitHub Desktop if you haven't already. You can download it from [GitHub Desktop's official website](https://desktop.github.com/).
-2. Open GitHub Desktop and sign in to your GitHub account.
-3. Clone the newly created repository:
-   - Click on **File** > **Clone Repository**.
-   - Select your repository from the list and click **Clone**.
-4. Create your first branch:
-   - In the GitHub Desktop interface, click on the **Current Branch** dropdown.
-   - Select **New Branch** and name it `feature/branch01`.
-   - Click **Create Branch**.
-
-### Backend Setup
-
-1. (Optional) Set your project description and author information in the `pyproject.toml` file:
-   ```toml
-   description = "Your Description"
-   authors = ["Your Name <you@example.com>"]
-2. Open the project in your preferred IDE (the standard for the team is Visual Studio Code).
-3. Open the Terminal within Visual Studio Code.
-4. Ensure you are in the root project directory where the `makefile` is located.
-5. Execute the following commands:
-  - uv initialization
-    ````bash
-    make uv_init
-    ````
-  - uv sync
-    ````bash
-    make uv_sync
-    ````
-6. Verify that the `.venv` folder has been generated within the `/backend` directory.
-
-### Running Backend Locally
-
-After setting up the backend dependencies, you can run the development server:
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Start the FastAPI development server:
-   ```bash
-   uv run uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
-
-3. The backend API will be accessible at http://localhost:8000
-
-**Note**: If port 8000 is already in use (e.g., by Docker containers), either stop the containers with `make clean` or use a different port like `--port 8001`.
-
-### Frontend Setup
-
-1. Navigate to the `frontend` folder.
-2. Install dependencies by running:
-```bash
-npm install
 ```
-3. Start the frontend development server with:
-````bash
-npm run dev
-````
-4. The frontend will now be accessible at http://localhost:3000 by default, providing a user interface.
-
-### Git Hooks Setup (Recommended)
-
-This repository includes a pre-commit hook that automatically scans for secrets and credentials before each commit, preventing accidental exposure of sensitive data.
-
-**Setup (run once after cloning):**
-
-```bash
-chmod +x setup-hooks.sh
-./setup-hooks.sh
+Browser ── http://frontend.localtest.me
+  │  /api/*  ── Next.js proxy ──▶ backend (internal, no ingress)
+  │  WebSocket ──▶ http://powersync.localtest.me
+  ▼
+backend (FastAPI)
+  ├─ Ollama (host) ── CV → structured JSON inventory
+  ├─ MongoDB Enterprise RS  (MCK operator, self-hosted Ops Manager — in-cluster)
+  └─ SeaweedFS (S3 gateway) ── raw frame storage
+MongoDB change stream → PowerSync → WebSocket → browser SQLite (wa-sqlite / OPFS)
 ```
 
-This configures Git to use the `.githooks` directory and enables the pre-commit security scanner.
+Capture flow: browser → `POST /api/inventory/capture` → CV (Ollama) → insert doc
+`status=PENDING_UPLOAD` → `put_object` to S3 → update `status=ACTIVE` → change
+stream → PowerSync → browser re-renders.
 
-**What it does:**
+## Tech stack
 
-- Runs `security_check.sh` before every commit
-- Scans staged files for potential secrets (API keys, passwords, tokens, etc.)
-- Blocks the commit if security issues are detected
+- MongoDB **Enterprise 8.0.9-ent** (MCK operator, self-hosted Ops Manager — fully
+  in-cluster, no external account). `mongot` Search is wired but **Preview/deferred**:
+  Ops Manager 8.0 provisions MongoDB 8.0.x, and Search needs 8.2+. Storage, sync, and
+  capture all work today; Search activates once Ops Manager is upgraded.
+- PowerSync 1.21.0 self-hosted (MongoDB-backed bucket storage)
+- SeaweedFS (S3-compatible object store, in-cluster)
+- FastAPI + Python 3.13 + `uv`
+- Next.js 15 (App Router, JS) + LeafyGreen + Tailwind 4
+- `@powersync/web` + `@journeyapps/wa-sqlite` (OPFS)
+- Ollama / Qwen2.5-VL 7B (host machine)
+- kind (local Kubernetes)
 
-**If a commit is blocked:**
+## Quick start
 
-1. Review the security issues listed in the output
-2. Remove or properly secure the flagged credentials
-3. Re-stage your changes and commit again
-
-**Bypass (not recommended):**
+**No external cloud account is required** — the control plane (Ops Manager) runs
+inside the kind cluster. See **[`RUN_LOCAL.md`](RUN_LOCAL.md)** for the full guide:
+prerequisites, expected timings, caveats, and troubleshooting.
 
 ```bash
-git commit --no-verify
+./scripts/setup.sh         # ~25–35 min on first run (Ops Manager dominates)
+./scripts/verify.sh        # end-to-end smoke test
+open http://frontend.localtest.me
 ```
 
-### Kanopy Deployment
+`setup.sh` prints ready-to-use access details (a Compass connection string, the Ops
+Manager login, and S3 keys) when it finishes. The cluster exposes them on these host
+ports (always-on, no `kubectl port-forward` needed):
 
-For deploying your demo to Kanopy (MongoDB's internal Kubernetes platform), see the [KANOPY_DEPLOYMENT_README.md](KANOPY_DEPLOYMENT_README.md) for detailed instructions on:
+| What | Endpoint | Notes |
+|---|---|---|
+| Web app | `http://frontend.localtest.me` | |
+| Backend health | `http://frontend.localtest.me/api/health` | via the frontend proxy |
+| PowerSync | `http://powersync.localtest.me/probes/liveness` | |
+| MongoDB (Compass) | `localhost:27017` | `…/?authSource=admin&directConnection=true` |
+| Ops Manager UI | `http://localhost:8080` | login printed by `setup.sh` |
+| S3 (SeaweedFS) | `http://localhost:8333` | bucket `store-media`, keys `retaildemo`/`retaildemo-secret` |
+| S3 browser UI | `http://s3.localtest.me/buckets/store-media/` | local dev only; no login needed |
+| Backend API docs | `http://backend.localtest.me/docs` | local dev only; Swagger + ReDoc |
 
-- Setting up Drone CI/CD pipeline
-- Configuring Kubernetes secrets
-- Choosing between separate pods vs multi-container deployments
-- Environment variables and secrets configuration
-- Resource management and troubleshooting
+## Make targets
 
-## DEMO README
+| | |
+|---|---|
+| `make setup` | Bring up the kind cluster |
+| `make verify` | End-to-end smoke test |
+| `make status` | `kubectl -n retail get pods,svc,ingress` |
+| `make logs` | Tail app pod logs |
+| `make reset` | Tear down the kind cluster |
+| `make uv_sync` | Refresh backend Python deps |
 
-<h1 style="color:red">REPLACE THE CONTENT OF THIS README WITH `README-demo.md` and DELETE THE `README-demo.md` FILE!!!!!!!!! </h1>
+## Repo layout
+
+```
+backend/       FastAPI: api/, cv/, db/, storage/ (S3 adapter), retention/
+frontend/      Next.js client; PowerSync schema in lib/powersync/schema.js
+powersync/     powersync.yaml + sync-rules.yaml
+infra/k8s/     kind manifests (operator, MongoDB, SeaweedFS, ingress, access/ NodePorts)
+deploy/local/  Helm values for the local kind stack
+scripts/       lib.sh (shared helpers) + setup/preflight/verify/reset/pull-models
+docs/          Architecture and troubleshooting notes
+```
+
+## Phase 2 (planned)
+
+React Native mobile client sharing the same backend contracts:
+`frontend/lib/powersync/schema.js`, `/api/auth/{token,keys}`, and
+`POST /api/inventory/capture`. True offline capture with reconnect-and-sync.
+
+## License
+
+See [LICENSE](LICENSE).

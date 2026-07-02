@@ -1,0 +1,28 @@
+# mongot Search nodes attached to the Enterprise replica set above.
+# This is what makes self-hosted $vectorSearch work locally. The operator
+# auto-wires mongot<->mongod (search user + setParameter), so we only declare
+# the source reference + sizing.
+#
+# PREVIEW / VERSION-SENSITIVE (MongoDBSearch): confirm spec field names and pin
+# `version` to a mongot build compatible with the mongod 8.2.x above.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: retail-search
+  namespace: mongodb
+spec:
+  source:
+    mongodbResourceRef:
+      name: retail-mongodb
+  version: "0.64.0"
+  replicas: 1
+  resourceRequirements:
+    requests:
+      cpu: "750m"
+      memory: 2Gi
+    limits:
+      cpu: "1500m"
+      memory: 3Gi
+  persistence:
+    single:
+      storage: 5Gi

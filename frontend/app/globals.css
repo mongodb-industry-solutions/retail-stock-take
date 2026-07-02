@@ -1,2 +1,56 @@
 @import "tailwindcss";
 
+/* ── Theme tokens for the layout shell ────────────────────────
+   LeafyGreen components theme themselves via LeafyGreenProvider's
+   darkMode (see app/providers.js). These variables only style the
+   custom shell bits that aren't LG components: the header/panel
+   backgrounds + dividers, the capture drop zone, and the confidence
+   bar. They flip with the `.light` class on <html>, kept in sync by
+   the theme toggle in providers.js. Dark is the default. */
+
+/* Dark (default) */
+:root {
+  --mdb-bg: #001E2B;
+  --mdb-surface: #0C2436;
+  --mdb-surface-2: #081A27;
+  --mdb-border: #1C3A4A;
+  --mdb-border-active: #00684A;
+  --mdb-green: #00ED64;
+  --mdb-green-mid: #00A35C;
+  --mdb-text: #E3F4EF;
+  --mdb-muted: #5E8070;
+  --mdb-dim: #2A4A5A;
+}
+
+/* Light */
+:root.light {
+  --mdb-bg: #F4F8F6;
+  --mdb-surface: #FFFFFF;
+  --mdb-surface-2: #EDF4F0;
+  --mdb-border: #D0E4DA;
+  --mdb-border-active: #00684A;
+  --mdb-green: #00684A;
+  --mdb-green-mid: #00A35C;
+  --mdb-text: #001E2B;
+  --mdb-muted: #4A7060;
+  --mdb-dim: #96B4AA;
+}
+
+/* ── Capture drop zone ───────────────────────────────────────── */
+.dropzone {
+  background-color: var(--mdb-surface-2);
+  border: 1px dashed var(--mdb-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+  min-height: 140px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+  display: block;
+  width: 100%;
+}
+.dropzone:hover,
+.dropzone.drag-over {
+  background-color: var(--mdb-surface);
+  border-color: var(--mdb-green-mid);
+}

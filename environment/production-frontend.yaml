@@ -1,0 +1,14 @@
+# Frontend (production). Loaded after environment/production.yaml.
+services:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+    probes: true
+    ingress: true
+probes:
+  enabled: true
+  path: /
+env:
+  NODE_ENV: production
+  BACKEND_URL: http://retail-stock-take-backend-web-app-80

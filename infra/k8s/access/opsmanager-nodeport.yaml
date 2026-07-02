@@ -1,0 +1,29 @@
+# Always-on host access to the Ops Manager web UI.
+#
+# The MCK operator owns the headless `ops-manager-svc` — we don't touch it.
+# This separate NodePort Service exposes the Ops Manager application pod
+# (ops-manager-0, the only pod serving HTTP on :8080) to the host.
+#
+# Host wiring: kind maps host :8080 -> nodePort 30080 (see infra/k8s/kind-cluster.yaml).
+# Open:  http://localhost:8080   (login with the ops-manager-admin-secret creds;
+#        setup.sh prints them at the end.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ops-manager-ext
+  namespace: mongodb
+  labels:
+    app: ops-manager-ext
+    part-of: retail-stock-take-access
+spec:
+  type: NodePort
+  selector:
+    # Matches the Ops Manager application StatefulSet pods (the web UI on :8080).
+    app: ops-manager-svc
+    controller: mongodb-enterprise-operator
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+      protocol: TCP

@@ -1,0 +1,21 @@
+# PowerSync sync rules (edition 3 syntax — streams).
+# Phase 1: single global stream — every authenticated client sees all
+# inventory captures. Phase 2 will add per-store / per-operator partitioning
+# once the JWT carries those claims.
+#
+# Projection notes:
+#   - MongoDB docs use _id as the primary key. PowerSync requires the client
+#     PK column to be a string named `id`, so we project `_id AS id`.
+#   - `items` is a nested array; PowerSync serializes it to JSON text. The
+#     client schema in frontend/lib/powersync/schema.js declares it as text and
+#     the useInventory hook JSON.parses it on read.
+
+config:
+  edition: 3
+
+streams:
+  global_inventory:
+    auto_subscribe: true
+    queries:
+      - SELECT _id AS id, captured_at, device_id, operator_id, cv_model, items, status
+        FROM inventory_captures
