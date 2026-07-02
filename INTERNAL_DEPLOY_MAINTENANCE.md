@@ -53,14 +53,23 @@ push. Drone will fail silently if secrets/configmaps are missing.
 - Create an Atlas cluster (M10+ for change streams).
 - Create three database users: `app` (readWrite on `retail-stock-take`), `powersync`
   (readWrite on `rs-powersync`, read on `retail-stock-take`, clusterMonitor), `admin` (root).
-- Enable change stream pre/post images on the `inventory_captures` collection:
+- **The collection + change-stream pre/post images are created automatically.**
+  On startup the backend runs `ensure_collection_ready()`, which creates
+  `inventory_captures` **with `changeStreamPreAndPostImages` enabled** if it's
+  missing — this uses only `createCollection` (granted by `readWrite`), so no
+  manual step and no `dbAdmin` are needed for a fresh deploy. (Locally, mongo-init
+  already does this.)
+  - **Only if the collection already exists *without* pre/post images** does the
+    backend fall back to `collMod` — which requires **`dbAdmin`**. If your `app`
+    user lacks it, the backend logs a warning (non-fatal) and you enable it once
+    with an admin user:
 
-  ```js
-  db.getSiblingDB("retail-stock-take").runCommand({
-    collMod: "inventory_captures",
-    changeStreamPreAndPostImages: { enabled: true }
-  })
-  ```
+    ```js
+    db.getSiblingDB("retail-stock-take").runCommand({
+      collMod: "inventory_captures",
+      changeStreamPreAndPostImages: { enabled: true }
+    })
+    ```
 
 - Whitelist the Kanopy egress IPs in Atlas Network Access.
 
