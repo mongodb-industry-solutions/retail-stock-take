@@ -11,4 +11,4 @@ probes:
   path: /
 env:
   NODE_ENV: production
-  BACKEND_URL: http://retail-stock-take-backend-web-app-80
+  BACKEND_URL: http://retail-stock-take-backend-prod-web-app-80

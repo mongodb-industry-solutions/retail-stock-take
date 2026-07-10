@@ -27,7 +27,7 @@ env:
   PS_JWT_AUDIENCE: powersync
   PS_JWT_ISSUER: retail-stock-take
   POWERSYNC_PUBLIC_URL: https://retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com
-  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
+  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-prod-web-app-80
   # Cloud CV via Grove (OpenAI-compatible + vision). Override model/base URL to
   # match your Grove request; GROVE_API_KEY comes from the secret below.
   CV_PROVIDER: grove
