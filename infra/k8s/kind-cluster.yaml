@@ -1,0 +1,46 @@
+# kind cluster for the local stack.
+#
+# extraPortMappings publish ports from the kind node container to the host so
+# you can reach in-cluster services directly from your laptop. These mappings
+# are FIXED AT CLUSTER CREATION — changing them requires `make reset` + setup.
+#
+#   host :80 / :443  -> ingress-nginx          (http://*.localtest.me)
+#   host :27017      -> NodePort 30017 -> MongoDB     (Compass / mongosh)
+#   host :8080       -> NodePort 30080 -> Ops Manager (web UI)
+#   host :8333       -> NodePort 30333 -> SeaweedFS    (S3 API)
+#
+# The NodePort Services that back the three app ports live in
+# infra/k8s/access/ (MongoDB, Ops Manager) and infra/k8s/seaweedfs/seaweedfs.yaml
+# (S3). The nodePort numbers there MUST match the containerPort numbers below.
+# The node is also labelled ingress-ready=true (required by the kind ingress-nginx
+# manifest).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # App ingress (ingress-nginx controller).
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+      # MongoDB — host :27017 -> NodePort 30017 (svc retail-mongodb-ext, ns mongodb).
+      - containerPort: 30017
+        hostPort: 27017
+        protocol: TCP
+      # Ops Manager web UI — host :8080 -> NodePort 30080 (svc ops-manager-ext, ns mongodb).
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      # SeaweedFS S3 API — host :8333 -> NodePort 30333 (svc seaweedfs, ns retail).
+      - containerPort: 30333
+        hostPort: 8333
+        protocol: TCP

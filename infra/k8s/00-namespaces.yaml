@@ -1,0 +1,13 @@
+# Namespaces for the local kind stack.
+#   mongodb : MCK operator + the Enterprise replica set + mongot Search nodes
+#   retail  : the application (backend, frontend, powersync) + SeaweedFS
+# Cross-namespace access uses FQDNs (…​.svc.cluster.local), so this split is fine.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mongodb
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: retail

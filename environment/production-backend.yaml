@@ -1,0 +1,42 @@
+# Backend (production). Loaded after environment/production.yaml.
+# Namespace prerequisites: secret retail-stock-take (keys MONGODB_URI +
+# GROVE_API_KEY) and secret jwt-keys (jwt-private.pem + jwt-public.pem).
+# No S3 bucket / S3 IRSA needed — photo store disabled (STORAGE_PROVIDER=none).
+services:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+    probes: true
+probes:
+  enabled: true
+  path: /api/health
+env:
+  DATABASE_NAME: retail-stock-take
+  APP_NAME: retail-stock-take-backend
+  APP_COLLECTION: inventory_captures
+  # Photo store disabled in cloud for now — metadata only (doc.asset is null).
+  # Re-enable with STORAGE_PROVIDER=s3 + STORAGE_BUCKET + S3 IRSA permissions.
+  STORAGE_PROVIDER: none
+  RETENTION_DAYS: "30"
+  RECONCILER_INTERVAL_SECONDS: "300"
+  JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
+  JWT_PUBLIC_KEY_PATH: /secrets/jwt-public.pem
+  JWT_KID: retail-key-1
+  JWT_ALGORITHM: RS256
+  PS_JWT_AUDIENCE: powersync
+  PS_JWT_ISSUER: retail-stock-take
+  POWERSYNC_PUBLIC_URL: https://retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com
+  POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
+  # Cloud CV via Grove (OpenAI-compatible + vision). Override model/base URL to
+  # match your Grove request; GROVE_API_KEY comes from the secret below.
+  CV_PROVIDER: grove
+  GROVE_BASE_URL: https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1
+  GROVE_MODEL: gpt-5.5
+  GROVE_FALLBACK_MODEL: gpt-4o
+envSecrets:
+  MONGODB_URI: retail-stock-take
+  GROVE_API_KEY: retail-stock-take
+volumeSecrets:
+  - name: jwt-keys
+    path: /secrets

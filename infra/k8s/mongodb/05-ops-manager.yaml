@@ -1,0 +1,80 @@
+# Self-hosted Ops Manager — local control plane for the MCK Enterprise operator.
+# Replaces Cloud Manager; no external connectivity required after image pulls.
+#
+# The MCK operator provisions two things from this CR:
+#   1. ops-manager-db  — a single-member RS that stores Ops Manager's own state
+#   2. ops-manager     — the Ops Manager application (Java, ~2–4 GB RAM)
+#
+# After reaching Running status the operator creates a Secret named
+# ops-manager-admin-key (publicKey + privateKey) which the MongoDB CR uses
+# as its `credentials` reference.  setup.sh waits for that Secret then creates
+# the ops-manager-project ConfigMap before applying the MongoDB CR.
+#
+# PREVIEW / VERSION-SENSITIVE: verify field names against the installed CRD:
+#   kubectl explain mongodbopsmanager.spec
+#   kubectl explain mongodbopsmanager.spec.applicationDatabase
+apiVersion: mongodb.com/v1
+kind: MongoDBOpsManager
+metadata:
+  name: ops-manager
+  namespace: mongodb
+spec:
+  replicas: 1
+
+  # Ops Manager release. Must be compatible with the mongod version in
+  # 10-mongodb-enterprise.yaml (8.2.x-ent).  Ops Manager 8.0 supports
+  # MongoDB 8.x.  Adjust if your image registry offers a newer 8.x build.
+  version: "8.0.0"
+
+  # Secret created by setup.sh before this CR is applied.
+  # Keys: Username (email address), Password (login password).
+  adminCredentials: ops-manager-admin-secret
+
+  # Disable the first-run UI wizard and email delivery (no SMTP in-cluster).
+  # Enable remote version manifest so Ops Manager fetches MongoDB 8.2.x from CDN.
+  configuration:
+    mms.ignoreInitialUiSetup: "true"
+    mms.adminEmailAddr: "admin@retail-demo.local"
+    mms.fromEmailAddr: "admin@retail-demo.local"
+    mms.replyToEmailAddr: "admin@retail-demo.local"
+    mms.mail.transport: "smtp"
+    mms.mail.hostname: "localhost"
+    mms.mail.port: "25"
+    mongodb.release.autoDownload: "true"
+    mms.versions.source: "remote"
+
+  # Ops Manager pod resources. Heavy JVM — give it 2 GB floor, 4 GB ceiling.
+  statefulSet:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: mongodb-ops-manager
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: 2Gi
+                limits:
+                  cpu: "2000m"
+                  memory: 4Gi
+
+  # Ops Manager's own application database. CRD requires >= 3 members.
+  # 3 lightweight members with tight resource limits to fit on a 16 GB laptop.
+  applicationDatabase:
+    members: 3
+    version: "8.0.0-ent"
+    podSpec:
+      persistence:
+        single:
+          storage: 5Gi
+      podTemplate:
+        spec:
+          containers:
+            - name: mongod
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: 256Mi
+                limits:
+                  cpu: "500m"
+                  memory: 512Mi

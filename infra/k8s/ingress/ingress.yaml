@@ -1,0 +1,128 @@
+# Browser-facing ingress for the kind stack (ingress-nginx).
+#   http://localhost               -> Next.js frontend (the app; use this one —
+#                                      see secure-context note below)
+#   http://frontend.localtest.me   -> Next.js frontend (same app, alias for
+#                                      curl/devtools use)
+#   http://powersync.localtest.me  -> PowerSync sync service (browser WebSocket)
+#   http://s3.localtest.me         -> SeaweedFS filer UI (local dev only)
+#   http://backend.localtest.me    -> FastAPI Swagger/ReDoc (local dev only)
+# *.localtest.me resolves to 127.0.0.1, so no /etc/hosts edits are needed. The
+# kind cluster maps host :80 -> ingress (see scripts/setup.sh kind config).
+#
+# The frontend MUST also be reachable at the literal hostname "localhost":
+# Chrome only treats https:// origins or the literal "localhost"/127.0.0.1
+# hostname as a secure context. wa-sqlite/OPFS (via PowerSync) needs the Web
+# Locks API, which Chrome disables outside a secure context — so PowerSync's
+# local database silently fails to open on http://frontend.localtest.me even
+# though it resolves to 127.0.0.1. Open the app at http://localhost instead.
+#
+# The backend has NO ingress for production use: the browser reaches it only through
+# the frontend's same-origin /api/* proxy. backend.localtest.me is local dev tooling
+# only and has no equivalent in cloud/Kanopy deployments.
+#
+# Service names target the mongodb/web-app chart releases (deploy/local). Chart
+# 4.30.0 names the Service `<release>-web-app-80`; confirm with
+# `kubectl -n retail get svc` (the suffix is chart-version dependent).
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: retail
+  annotations:
+    # CV inference (moondream cold-start) can take 60–120s on CPU.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # Shelf photos (esp. from phones) routinely exceed nginx's 1 MB default;
+    # match the backend's 10 MB MAX_UPLOAD_BYTES (a little headroom for multipart).
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: retail-stock-take-frontend-web-app-80
+                port:
+                  number: 80
+    - host: frontend.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: retail-stock-take-frontend-web-app-80
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: powersync
+  namespace: retail
+  annotations:
+    # Long-lived sync WebSocket.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: powersync.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: retail-stock-take-powersync-web-app-80
+                port:
+                  number: 80
+---
+# LOCAL DEV TOOLING ONLY: SeaweedFS filer UI for browsing the store-media bucket.
+# No authentication required (anonymous read is in s3.json).
+# http://s3.localtest.me/buckets/store-media/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seaweedfs-filer
+  namespace: retail
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: s3.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: seaweedfs
+                port:
+                  number: 8888
+---
+# LOCAL DEV TOOLING ONLY: FastAPI Swagger/ReDoc — no equivalent in cloud/Kanopy.
+# http://backend.localtest.me/docs   (Swagger)
+# http://backend.localtest.me/redoc  (ReDoc)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-devtools
+  namespace: retail
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: backend.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: retail-stock-take-backend-web-app-80
+                port:
+                  number: 80

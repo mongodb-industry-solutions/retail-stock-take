@@ -1,0 +1,32 @@
+# PowerSync service configuration.
+# Phase 1: MongoDB-backed replication + MongoDB-backed bucket storage.
+# Auth: RS256 JWTs validated via backend's /api/auth/keys JWKS endpoint.
+
+replication:
+  connections:
+    - type: mongodb
+      uri: !env PS_DATA_SOURCE_URI
+      # PowerSync auto-enables changeStreamPreAndPostImages on watched
+      # collections (the mongo-init script also enables it defensively).
+      post_images: auto_configure
+
+storage:
+  type: mongodb
+  uri: !env PS_MONGO_URI
+
+# Client authentication via the backend's JWKS endpoint.
+# Backend signs JWTs with the matching RS256 private key.
+client_auth:
+  jwks_uri: !env PS_JWKS_URL
+  audience:
+    - !env PS_JWT_AUDIENCE
+
+# Sync rules live in a sibling file mounted at /config/sync-rules.yaml.
+sync_config:
+  path: /config/sync-rules.yaml
+
+api:
+  port: !env PS_PORT
+
+# TODO Phase 3: rotate from JWKS-from-backend to a dedicated identity service
+#       and consider EdDSA for shorter tokens.
