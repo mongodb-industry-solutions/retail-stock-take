@@ -18,7 +18,7 @@ probes:
 env:
   PS_PORT: "8080"
   POWERSYNC_CONFIG_PATH: /config/powersync.yaml
-  PS_JWKS_URL: http://retail-stock-take-backend-web-app-80/api/auth/keys
+  PS_JWKS_URL: http://retail-stock-take-backend-prod-web-app-80/api/auth/keys
   PS_JWT_AUDIENCE: powersync
   PS_JWT_ISSUER: retail-stock-take
 envSecrets:
