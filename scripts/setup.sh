@@ -270,8 +270,8 @@ spin_wait "ollama" 300 5 -- ollama_ready || warn "ollama pod not ready — check
 
 # ===========================================================================
 step "build images + load into kind"
-docker build -t retail-stock-take-backend:local  -f Dockerfile.backend .
-docker build -t retail-stock-take-frontend:local -f Dockerfile.frontend .
+docker build -t retail-stock-take-backend:local  -f backend/Dockerfile .
+docker build -t retail-stock-take-frontend:local -f frontend/Dockerfile .
 kind load docker-image retail-stock-take-backend:local  --name "$CLUSTER"
 kind load docker-image retail-stock-take-frontend:local --name "$CLUSTER"
 ok "images built + loaded"
@@ -280,7 +280,7 @@ ok "images built + loaded"
 step "deploy app (mongodb/web-app chart)"
 for svc in backend frontend powersync; do
   helm upgrade --install "retail-stock-take-$svc" mongodb-webapp/web-app \
-    --version "$WEBAPP_CHART_VERSION" -n "$NS_APP" -f "deploy/local/$svc.yaml" >/dev/null
+    --version "$WEBAPP_CHART_VERSION" -n "$NS_APP" -f "infra/local/$svc.yaml" >/dev/null
   say "released retail-stock-take-$svc"
 done
 
@@ -302,10 +302,7 @@ step "ollama models (in-cluster)"
 if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
   ok "${OLLAMA_MODEL:-moondream} already present"
 else
-  say "pulling ${OLLAMA_MODEL:-moondream} (~1.5 GB) — CV captures will work once done"
-  ( kubectl -n "$NS_APP" exec deploy/ollama -- ollama pull "${OLLAMA_MODEL:-moondream}" \
-    && kubectl -n "$NS_APP" exec deploy/ollama -- ollama pull "${OLLAMA_FALLBACK_MODEL:-qwen2.5vl:7b}" \
-  ) >/tmp/retail-ollama-pull.log 2>&1 &
+  ( "$ROOT/scripts/pull-models.sh" ) >/tmp/retail-ollama-pull.log 2>&1 &
   say "model pull running in the background → /tmp/retail-ollama-pull.log"
 fi
 

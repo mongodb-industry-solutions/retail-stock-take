@@ -1,6 +1,6 @@
 # Local kind values for the self-hosted PowerSync service (mongodb/web-app chart).
 #   helm upgrade --install retail-stock-take-powersync mongodb/web-app \
-#     -n retail -f deploy/local/powersync.yaml
+#     -n retail -f infra/local/powersync.yaml
 #
 # scripts/setup.sh must create first in the `retail` namespace:
 #   - configmap powersync-config : powersync/powersync.yaml + powersync/sync-rules.yaml

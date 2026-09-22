@@ -258,7 +258,7 @@ kubectl -n retail logs deploy/retail-stock-take-powersync-web-app -f
 ### Rebuilding after a code change
 
 ```bash
-docker build -t retail-stock-take-backend:local -f Dockerfile.backend .
+docker build -t retail-stock-take-backend:local -f backend/Dockerfile .
 kind load docker-image retail-stock-take-backend:local --name retail-stock-take
 kubectl -n retail rollout restart deploy/retail-stock-take-backend-web-app
 ```
@@ -503,6 +503,6 @@ If the pod is in `CrashLoopBackOff`, increase Docker Desktop's memory allocation
 ### Helm error: "no Service objects specified with ingress: true"
 
 The `mongodb/web-app` chart requires a service entry with `ingress: true` when
-`ingress.enabled=true`. Check `deploy/local/*.yaml` — each service with an ingress
+`ingress.enabled=true`. Check `infra/local/*.yaml` — each service with an ingress
 must have `ingress: true` on its port entry. The backend intentionally sets
 `ingress: false`.

@@ -5,7 +5,7 @@ It's a real **PowerSync** web client: it renders shelf inventory from a local
 SQLite database that PowerSync keeps in sync with MongoDB, and it works offline.
 
 For the project overview see [`../README.md`](../README.md); to run the whole
-stack locally see [`../RUN_LOCAL.md`](../RUN_LOCAL.md).
+stack locally see [`../docs/RUN_LOCAL.md`](../docs/RUN_LOCAL.md).
 
 ## How it fits together
 
@@ -40,7 +40,7 @@ lib/powersync/       schema.js (AppSchema) + client setup
 ## Local dev
 
 Normally you run the frontend **inside the kind cluster** via `./scripts/setup.sh`
-(it builds `Dockerfile.frontend`, `output: 'standalone'`, and serves it behind the
+(it builds `frontend/Dockerfile`, `output: 'standalone'`, and serves it behind the
 ingress at http://frontend.localtest.me).
 
 To iterate on the UI alone against an already-running backend:

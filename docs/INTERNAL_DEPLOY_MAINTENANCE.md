@@ -19,10 +19,11 @@ Images (backend + frontend) are built by Drone → pushed to ECR. PowerSync uses
 upstream image directly (no build step).
 
 MongoDB → **Atlas**. CV capture in cloud runs through **Grove** (MongoDB's
-GenAI gateway — OpenAI-compatible, vision). The **photo store is disabled in
-cloud for now** (`STORAGE_PROVIDER=none`): capture keeps the inventory metadata
-and syncs it, but does not persist the raw frame — so **no AWS S3 bucket / IRSA
-is required**. (Re-enable object storage later; see Known limitations.)
+GenAI gateway — OpenAI-compatible, vision). The **photo store is ON** against
+**AWS S3** (IRSA): raw frames persist to `industry-solutions-demos` under
+`industry/mobile/retail-stock-take/uploads/`, are retained **3 months**, then the
+object **and** the Mongo doc are deleted by the reconciler. The curated
+`sample-shelves/` prefix is served to presenters via `/api/sample-shelves`.
 
 ---
 
@@ -82,12 +83,18 @@ provisioned base URL + model; override `GROVE_BASE_URL` / `GROVE_MODEL` in
 `environment/*-backend.yaml` if they differ from the defaults. The key goes into
 the `retail-stock-take` Secret as `GROVE_API_KEY` (next step).
 
-> **AWS S3 is not required right now.** The photo store is disabled in cloud
-> (`STORAGE_PROVIDER=none`). To enable it later: create buckets
-> `retail-stock-take-media-staging` / `-prod` in `us-east-1` (no public access),
-> grant the IRSA role (`kanopy-staging-cicd-irsa` / `kanopy-prod-cicd-irsa`)
-> `s3:PutObject/GetObject/HeadObject/DeleteObject/ListBucket`, then set
-> `STORAGE_PROVIDER=s3` + `STORAGE_BUCKET` in `environment/*-backend.yaml`.
+> **AWS S3 (photo store) — already configured.** The cloud backend writes frames
+> to the **shared `industry-solutions-demos`** bucket under
+> `industry/mobile/retail-stock-take/uploads/` (`STORAGE_BUCKET` +
+> `STORAGE_UPLOAD_PREFIX`). Grant the IRSA role (`kanopy-staging-cicd-irsa` /
+> `kanopy-prod-cicd-irsa`) these S3 permissions on
+> `arn:aws:s3:::industry-solutions-demos/industry/mobile/retail-stock-take/*`
+> (covers **both** `uploads/` and the curated `sample-shelves/`):
+> `s3:PutObject`, `s3:GetObject`, `s3:HeadObject`, `s3:DeleteObject`, `s3:ListBucket`.
+> **If `industry-solutions-demos` is in a different AWS account than the IRSA
+> account (`275662791714`), also add a bucket policy trusting the IRSA role.**
+> Retention is app-level (`RETENTION_DAYS=90`, 3 months) and enforced by the
+> reconciler — **no S3 lifecycle rule needed**.
 
 ### 3. JWT keypair
 
@@ -150,8 +157,9 @@ kubectl -n "$NAMESPACE" get secret retail-stock-take jwt-keys -o name
 kubectl -n "$NAMESPACE" get configmap powersync-config -o name
 ```
 
-> **No AWS S3 secret/bucket needed** — the cloud photo store is off
-> (`STORAGE_PROVIDER=none`). Re-enable per §2 if you later want persisted frames.
+> **S3 is on** — the cloud photo store persists frames to the `industry-solutions-demos`
+> bucket, reached via IRSA (no additional Secret needed). See Prerequisites §2 for
+> the IRSA role S3 permissions + bucket policy.
 
 ### 5. Drone secrets
 
@@ -175,8 +183,8 @@ ECR, and runs the three Helm deploys in sequence.
 
 On every push to `staging` or `main`, Drone:
 
-1. Builds `Dockerfile.backend` → ECR (`industrysolutions/retail-stock-take-backend`)
-2. Builds `Dockerfile.frontend` → ECR (`industrysolutions/retail-stock-take-frontend`)
+1. Builds `backend/Dockerfile` → ECR (`industrysolutions/retail-stock-take-backend`)
+2. Builds `frontend/Dockerfile` → ECR (`industrysolutions/retail-stock-take-frontend`)
 3. `helm upgrade --install` for backend, frontend, powersync in sequence
 
 Each deploy step merges:
@@ -205,7 +213,7 @@ PowerSync is **not built** — the Drone step sets `image.repository` +
 
 | Key | Staging | Production | Notes |
 |---|---|---|---|
-| `STORAGE_PROVIDER` | `none` | `none` | Photo store off in cloud (metadata only). Set `s3` + `STORAGE_BUCKET` to re-enable |
+| `STORAGE_PROVIDER` | `s3` | `s3` | Object store on; frames → `industry-solutions-demos` `.../uploads/`, 3-mo retention (object + doc), samples served via `/api/sample-shelves` |
 | `CV_PROVIDER` | `grove` | `grove` | Cloud vision backend (local uses `ollama`) |
 | `GROVE_BASE_URL` | Grove gateway URL | same | OpenAI-compatible endpoint; from your Grove request |
 | `GROVE_MODEL` | `gpt-5.5` | `gpt-5.5` | Primary vision model (env-overridable) |
@@ -295,13 +303,12 @@ kubectl -n industrysolutions rollout restart deploy/retail-stock-take-powersync-
 
 ## Known limitations
 
-- **No photo store in cloud (for now).** `STORAGE_PROVIDER=none`, so capture
-  runs CV + writes inventory metadata + syncs via PowerSync, but the raw frame
-  is **not** persisted (`doc.asset` is null). No AWS S3 bucket / IRSA is
-  required. Re-enable object storage by creating the buckets + IRSA S3
-  permissions and setting `STORAGE_PROVIDER=s3` + `STORAGE_BUCKET` (see
-  Prerequisites §2). The retention reconciler runs but has no objects to expire
-  while disabled.
+- **AWS S3 photo store is on.** Frames persist to `industry-solutions-demos`
+  (`.../uploads/`) and are **purged after 3 months** (`RETENTION_DAYS=90`): the
+  reconciler deletes the object **and** the Mongo doc past `expires_at`. The
+  curated `sample-shelves/` gallery is served read-only via `/api/sample-shelves`
+  (bytes proxied to the browser). IRSA S3 permissions + optional cross-account
+  bucket policy are in Prerequisites §2.
 - **Cloud CV depends on a valid Grove key.** If `GROVE_API_KEY` is missing or
   the model isn't provisioned, capture returns 503 and `/api/health` shows the
   `cv` field as `GROVE_API_KEY not set` (or the Grove error). Local capture is

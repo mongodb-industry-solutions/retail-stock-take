@@ -20,7 +20,7 @@
 # the frontend's same-origin /api/* proxy. backend.localtest.me is local dev tooling
 # only and has no equivalent in cloud/Kanopy deployments.
 #
-# Service names target the mongodb/web-app chart releases (deploy/local). Chart
+# Service names target the mongodb/web-app chart releases (infra/local). Chart
 # 4.30.0 names the Service `<release>-web-app-80`; confirm with
 # `kubectl -n retail get svc` (the suffix is chart-version dependent).
 ---
