@@ -46,7 +46,7 @@ stream → PowerSync → browser re-renders.
 - PowerSync 1.21.0 self-hosted (MongoDB-backed bucket storage)
 - SeaweedFS (S3-compatible object store, in-cluster)
 - FastAPI + Python 3.13 + `uv`
-- Next.js 15 (App Router, JS) + LeafyGreen + Tailwind 4
+- Next.js 16 (App Router, JS) + LeafyGreen + Tailwind 4
 - `@powersync/web` + `@journeyapps/wa-sqlite` (OPFS)
 - Ollama / Qwen2.5-VL 7B (host machine)
 - kind (local Kubernetes)

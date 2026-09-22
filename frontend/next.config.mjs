@@ -23,10 +23,10 @@ const nextConfig = {
     ];
   },
 
-  webpack: (config) => {
-    config.resolve.fallback = { ...config.resolve.fallback, crypto: false };
-    return config;
-  },
+  // Next 16 defaults to Turbopack. The old webpack crypto:false fallback
+  // (defensive, no app source imports node:crypto) isn't needed under
+  // Turbopack; an empty turbopack config enables the default bundler cleanly.
+  turbopack: {},
 };
 
 export default nextConfig;
