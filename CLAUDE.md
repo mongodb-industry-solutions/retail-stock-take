@@ -10,7 +10,7 @@ Phase 1 = local web stack + CV pipeline + PowerSync end-to-end from the browser.
 Phase 2 = React Native mobile client + true offline capture.
 
 Built on top of the Industry Solutions demo template
-(FastAPI/uv + Next.js 15 + LeafyGreen + Tailwind 4). **Local runs on Kubernetes
+(FastAPI/uv + Next.js 16 + LeafyGreen + Tailwind 4). **Local runs on Kubernetes
 (kind); cloud deploys to Kanopy via the existing Drone pipelines.**
 
 ## Two deployment targets, one codebase (config-only switch)
@@ -115,7 +115,7 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
 - PowerSync: `journeyapps/powersync-service:1.21.0`
 - SeaweedFS: `chrislusf/seaweedfs` (all-in-one `weed server -s3`)
 - Kanopy chart: `mongodb/web-app` 4.30.0 (Service is `<release>-web-app-80`)
-- Node 22, Python 3.13, Next.js 15 / React 19 (App Router, **JS not TS**)
+- Node 22, Python 3.13, Next.js 16 / React 19 (App Router, **JS not TS**)
 - LeafyGreen UI + Tailwind 4
 - `@powersync/web` ^1.20, `@powersync/react` ^1.5.2, `@journeyapps/wa-sqlite` ^1.2.6
 - FastAPI 0.115+, `pyjwt[crypto]` 2.10+, `httpx` 0.27+, `boto3` 1.35+

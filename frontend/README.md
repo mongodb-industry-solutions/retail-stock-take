@@ -1,6 +1,6 @@
 # Frontend — retail-stock-take web client
 
-Next.js 15 (App Router, **JavaScript** — not TypeScript) + LeafyGreen + Tailwind 4.
+Next.js 16 (App Router, **JavaScript** — not TypeScript) + LeafyGreen + Tailwind 4.
 It's a real **PowerSync** web client: it renders shelf inventory from a local
 SQLite database that PowerSync keeps in sync with MongoDB, and it works offline.
 
