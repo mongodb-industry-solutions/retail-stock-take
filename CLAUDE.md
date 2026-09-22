@@ -41,7 +41,7 @@ backend (FastAPI)  ── /api/auth/{token,keys}, /api/inventory/capture, /api/h
    │  └─ insert metadata + asset ref ─▶ MongoDB
 PowerSync ── change streams (pre/post images) ─▶ WebSocket push ─▶ browser SQLite
 MongoDB Enterprise RS + mongot Search (MCK operator, Ops Manager managed — in-cluster)
-Ollama IN-CLUSTER (Moondream primary; Qwen2.5-VL 7B fallback) — ClusterIP Service
+Ollama IN-CLUSTER (Moondream primary; Qwen2.5-VL 7B optional) — ClusterIP Service
   `ollama:11434`, models on 10 Gi PVC (no host Ollama needed)
 ```
 
@@ -67,9 +67,12 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   `infra/k8s/access/` (+ seaweedfs.yaml). Mappings are fixed at cluster creation, so
   changing them needs `make reset && make setup`. Compass uses `directConnection=true`
   against pinned pod `retail-mongodb-0`.
-- Cloud MongoDB = **Atlas**. Cloud object storage = **AWS S3** (IRSA) **when
-  enabled** — but the **cloud photo store is currently OFF**
-  (`STORAGE_PROVIDER=none`), so no S3 bucket/IRSA is needed to deploy. Local
+- Cloud MongoDB = **Atlas**. Cloud object storage = **AWS S3** (IRSA), **ON**:
+  frames go to the shared `industry-solutions-demos` bucket under
+  `industry/mobile/retail-stock-take/uploads/` (`STORAGE_UPLOAD_PREFIX`),
+  retained **3 months** (`RETENTION_DAYS=90`), then the reconciler deletes the
+  object **and** the doc. A curated `sample-shelves/` prefix is served read-only
+  via `/api/sample-shelves` (image bytes proxied to the browser). Local
   always uses SeaweedFS (photos on).
 - **Object storage is vendor-agnostic** behind one `boto3` S3 adapter
   (`backend/storage/`). Use only the common S3 subset (Put/Get/Head/Delete/
@@ -81,7 +84,8 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   rule). MongoDB stores metadata + an `asset` reference; the bytes live in
   object storage. With `STORAGE_PROVIDER=none` the frame is not stored and
   `asset` is null. `crops/` keys are reserved for a future detection pass.
-- **Idempotent write FSM**: `PENDING_UPLOAD → ACTIVE → DELETED`. Retention is
+- **Idempotent write FSM**: `PENDING_UPLOAD → ACTIVE`; on expiry the reconciler
+  **deletes the object and the doc** (no `DELETED` tombstone persists). Retention is
   enforced by a **reconciler** (`backend/retention/`), NOT by bucket lifecycle.
 - Same Mongo cluster for source + PowerSync bucket storage, **distinct DBs**:
   `retail_demo` (source) vs `powersync` (bucket).
@@ -122,14 +126,14 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
 
 ## Conventions
 
-- Repo layout: **`backend/` + `frontend/` at root** (no npm workspace). Root
-  `Dockerfile.backend` + `Dockerfile.frontend` (what Drone expects).
+- Repo layout: **`backend/` + `frontend/` at root** (no npm workspace). Each has its
+  own `Dockerfile` (`backend/Dockerfile`, `frontend/Dockerfile` — what Drone expects).
 - **Single source of truth for the sync schema: `frontend/lib/powersync/schema.js`.**
   When you change a synced column, update three places in lockstep: this schema,
   `powersync/sync-rules.yaml`, and the writer in `backend/api/inventory.py`.
 - Storage access goes through `backend/storage/get_storage_adapter()` only.
 - Config: env-driven. `.env.example` documents the contract; local cluster values
-  live in `deploy/local/*.yaml`, cloud (Kanopy) values in `environment/*.yaml`
+  live in `infra/local/*.yaml`, cloud (Kanopy) values in `environment/*.yaml`
   (a shared base + per-service file). PowerSync needs `PS_*` vars for `!env`.
 - Backend split: routes in `backend/api/`, CV in `backend/cv/`, storage in
   `backend/storage/`, retention in `backend/retention/`, DB connector in
@@ -143,8 +147,8 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   of wa-sqlite. Don't remove. Frontend builds `output: 'standalone'`.
 - `.env.example` lives at root (note: the harness blocks direct `.env*` writes — use `mv` or have the user rename it).
 - Kanopy/Drone is live: `.drone.yml` (separate pods, 3 releases) + `environment/`.
-  Cloud needs manual prereqs: Atlas + the k8s secrets/configmap (see `.drone.yml`
-  header) + `./setup-drone-secrets.sh`.
+  Cloud needs manual prereqs: Atlas + the k8s secrets/configmap + the Drone CI
+  secrets (see `.drone.yml` header and `docs/KANOPY_DEPLOYMENT_README.md`).
 
 ## Key commands
 
@@ -175,8 +179,8 @@ internal-only. `scripts/lib.sh` holds shared color/spinner helpers for all scrip
   a string `_id`. Use `str(uuid.uuid4())`.
 - Don't change the JWT `aud` claim without updating both `backend/api/auth.py`
   AND `powersync/powersync.yaml`. Silent 401s if mismatched.
-- Don't rename `backend/` / `frontend/` or the root Dockerfiles — paths are in
-  the Dockerfiles, `.drone.yml`, scripts, and deploy values.
+- Don't move the `Dockerfile`s out of `backend/` / `frontend/` — their paths are
+  referenced in `.drone.yml`, `scripts/setup.sh`, and docs.
 - Don't rely on bucket lifecycle for retention — the reconciler is the source of
   truth.
 - Don't move the PowerSync config files; they're mounted at `/config/` (ConfigMap

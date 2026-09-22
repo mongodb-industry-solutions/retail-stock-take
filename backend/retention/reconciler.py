@@ -4,8 +4,8 @@ Two idempotent duties:
   * promote: PENDING_UPLOAD rows whose object now exists  -> ACTIVE.
              PENDING_UPLOAD rows whose object is still missing past the grace
              window (crashed mid-write) -> the doc is deleted.
-  * expire : ACTIVE rows past asset.expires_at -> delete the object, mark DELETED
-             (the deletion syncs to clients via PowerSync).
+  * expire : ACTIVE rows past asset.expires_at -> delete the object AND the doc
+             (the removal syncs to clients via PowerSync).
 
 Run modes:
   * in-process periodic loop (started from main.py lifespan), and
@@ -51,7 +51,7 @@ def run_once() -> dict:
     mdb = MongoDBConnector()
     # When the photo store is disabled (STORAGE_PROVIDER=none), docs carry no
     # asset — there are no objects to head/promote/delete, so skip the adapter
-    # entirely. Doc-level expiry below still runs and syncs DELETED to clients.
+    # entirely. Doc-level expiry below still runs.
     enabled = storage_enabled()
     adapter = get_storage_adapter() if enabled else None
     now = _now()
@@ -88,11 +88,9 @@ def run_once() -> dict:
             except Exception as e:  # noqa: BLE001
                 log.warning("delete_object(%s) failed: %s", key, e)
                 continue
-        mdb.update_one(
-            _collection,
-            {"_id": doc["_id"]},
-            {"$set": {"status": "DELETED", "asset.deleted_at": now.isoformat()}},
-        )
+        # Retention reached: object is gone, so remove the doc entirely rather
+        # than leave a tombstone (the delete change stream clears it client-side).
+        mdb.delete_one(_collection, {"_id": doc["_id"]})
         expired += 1
 
     result = {"promoted": promoted, "abandoned": abandoned, "expired": expired}

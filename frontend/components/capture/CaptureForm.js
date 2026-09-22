@@ -6,14 +6,18 @@ import Icon from '@leafygreen-ui/icon';
 import { Banner } from '@leafygreen-ui/banner';
 import { Body, Description } from '@leafygreen-ui/typography';
 import { useCapture } from './useCapture';
+import { useSampleShelves } from './useSampleShelves';
 
 export function CaptureForm() {
   const { submit, busy, error, lastResult } = useCapture();
+  const samples = useSampleShelves();
   const fileInput = useRef(null);
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [dragging, setDragging] = useState(false);
+  const [pickingName, setPickingName] = useState(null);
+  const [sampleError, setSampleError] = useState(null);
 
   function applyFile(f) {
     setFile(f);
@@ -54,6 +58,24 @@ export function CaptureForm() {
     const f = e.dataTransfer.files?.[0];
     if (!f || !f.type.startsWith('image/')) return;
     applyFile(f);
+  }
+
+  async function pickSample(name) {
+    setSampleError(null);
+    setPickingName(name);
+    try {
+      const res = await fetch(`/api/sample-shelves/image?name=${encodeURIComponent(name)}`);
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      const blob = await res.blob();
+      const f = new File([blob], name, { type: blob.type || 'image/jpeg' });
+      applyFile(f); // show in the dropzone
+      await submit(f); // same capture -> CV -> store -> sync path
+      clearFile();
+    } catch (e) {
+      setSampleError(String(e?.message || e));
+    } finally {
+      setPickingName(null);
+    }
   }
 
   return (
@@ -121,6 +143,43 @@ export function CaptureForm() {
           Capture
         </Button>
       </div>
+
+      {/* Curated sample shelves (cloud only) */}
+      {samples.enabled && (
+        <div
+          className="pt-2 border-t"
+          style={{ borderColor: 'var(--mdb-border)' }}
+        >
+          <Description style={{ marginBottom: 8 }}>Or pick a sample shelf</Description>
+          {sampleError && <Banner variant="danger">{sampleError}</Banner>}
+          {samples.error && <Banner variant="warning">{samples.error}</Banner>}
+          {samples.loading ? (
+            <Description style={{ color: 'var(--mdb-muted)' }}>Loading…</Description>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {samples.items.map((s) => (
+                <button
+                  key={s.name}
+                  type="button"
+                  onClick={() => pickSample(s.name)}
+                  disabled={busy || pickingName !== null}
+                  className="rounded overflow-hidden focus:outline-none disabled:opacity-60"
+                  style={{ border: '1px solid var(--mdb-border)' }}
+                  title={s.name}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/sample-shelves/image?name=${encodeURIComponent(s.name)}`}
+                    alt={s.name}
+                    className="w-full aspect-square object-cover"
+                    style={{ display: 'block' }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <Banner variant="danger">{error}</Banner>}
       {lastResult && !error && (

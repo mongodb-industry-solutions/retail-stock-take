@@ -25,12 +25,9 @@ infra/k8s/
 ```
 
 The app itself (backend, frontend, powersync) is deployed by `setup.sh` via the
-`mongodb/web-app` Helm chart with values in `deploy/local/*.yaml`.
+`mongodb/web-app` Helm chart with values in `infra/local/*.yaml`.
 
-> The `cloud-manager/` directory is **dead/legacy** — leftover from an earlier
-> Cloud-Manager-SaaS design. Nothing applies it (`setup.sh` provisions the
-> self-hosted Ops Manager via `05-ops-manager.yaml` and writes the
-> `ops-manager-project` ConfigMap inline). Safe to delete: `rm -rf infra/k8s/cloud-manager`.
+> The app itself is deployed by `setup.sh` via the `mongodb/web-app` chart (values in `infra/local/`).
 
 ## Bring-up
 
@@ -41,7 +38,7 @@ The app itself (backend, frontend, powersync) is deployed by `setup.sh` via the
 
 Ops Manager bootstraps itself in-cluster; `setup.sh` creates the admin secret,
 waits for it to reach Running, then fetches the orgId from its API to build the
-project ConfigMap the MongoDB CR references. See `RUN_LOCAL.md` for timings.
+project ConfigMap the MongoDB CR references. See `../../docs/RUN_LOCAL.md` for timings.
 
 ## Always-on host access
 
@@ -79,4 +76,4 @@ one pins to `retail-mongodb-0` for a stable single-node endpoint.
 
 The same app images + the same `mongodb/web-app` chart deploy to Kanopy via
 `.drone.yml`, with MongoDB→Atlas and storage→AWS S3. That path is **internal
-maintenance only** — see `INTERNAL_DEPLOY_MAINTENANCE.md`.
+maintenance only** — see `../../docs/INTERNAL_DEPLOY_MAINTENANCE.md`.

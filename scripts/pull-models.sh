@@ -9,14 +9,17 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 NS_APP="${NS_APP:-retail}"
 MODEL="${OLLAMA_MODEL:-moondream}"
-FALLBACK="${OLLAMA_FALLBACK_MODEL:-qwen2.5vl:7b}"
+# Local default: no fallback (qwen2.5vl:7b exceeds available CPU memory).
+FALLBACK="${OLLAMA_FALLBACK_MODEL:-}"
 
 step "ollama models (in-cluster)"
 say "pulling $MODEL (primary)"
 kubectl -n "$NS_APP" exec deploy/ollama -- ollama pull "$MODEL"
 ok "$MODEL ready"
 
-say "pulling $FALLBACK (fallback)"
-kubectl -n "$NS_APP" exec deploy/ollama -- ollama pull "$FALLBACK" && ok "$FALLBACK ready" || warn "$FALLBACK pull failed; continuing"
+if [ -n "$FALLBACK" ]; then
+  say "pulling $FALLBACK (fallback)"
+  kubectl -n "$NS_APP" exec deploy/ollama -- ollama pull "$FALLBACK" && ok "$FALLBACK ready" || warn "$FALLBACK pull failed; continuing"
+fi
 
 kubectl -n "$NS_APP" exec deploy/ollama -- ollama list

@@ -1,7 +1,7 @@
 # Local kind values for the backend, via the SAME mongodb/web-app chart used on
 # Kanopy (environment/*.yaml) — local<->cloud differ only by values/secrets.
 #   helm upgrade --install retail-stock-take-backend mongodb/web-app \
-#     -n retail -f deploy/local/backend.yaml
+#     -n retail -f infra/local/backend.yaml
 #
 # Secrets scripts/setup.sh must create in the `retail` namespace first:
 #   - retail-mongodb-uri : key MONGODB_URI (SCRAM conn string for the app user)

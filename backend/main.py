@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import auth, health, inventory
+from api import auth, health, inventory, sample_shelves
 from db.bootstrap import ensure_collection_ready
 from retention.reconciler import run_periodic
 from storage import get_storage_adapter, storage_enabled
@@ -55,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(inventory.router)
+app.include_router(sample_shelves.router)
 
 
 @app.get("/")

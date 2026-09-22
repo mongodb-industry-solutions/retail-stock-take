@@ -5,14 +5,15 @@
 #   frontend (Next.js)   — public ingress (the app)
 #   powersync            — public ingress (browser WebSocket); upstream image, no build
 #
-# Prereqs (see KANOPY_DEPLOYMENT_README.md + docs/architecture.md):
+# Prereqs (see docs/KANOPY_DEPLOYMENT_README.md + docs/architecture.md):
 #   - Drone secrets: ecr_access_key, ecr_secret_key, staging/prod kubernetes tokens
 #   - k8s secret  retail-stock-take : MONGODB_URI, PS_DATA_SOURCE_URI, PS_MONGO_URI (Atlas SRV),
 #                                             GROVE_API_KEY (Grove gateway key for cloud CV)
 #   - k8s secret  jwt-keys                  : jwt-private.pem + jwt-public.pem
 #   - k8s configmap powersync-config        : powersync.yaml + sync-rules.yaml
-# Cloud CV uses Grove (OpenAI-compatible VLM gateway). No AWS S3 bucket/IRSA
-# needed: the photo store is disabled in cloud (STORAGE_PROVIDER=none).
+# Cloud CV uses Grove (OpenAI-compatible VLM gateway). AWS S3 (IRSA) photo store
+# is ON for cloud — see docs/INTERNAL_DEPLOY_MAINTENANCE.md Prerequisites §2 for the
+# bucket + IRSA role permissions.
 kind: pipeline
 type: kubernetes
 name: staging
@@ -33,7 +34,7 @@ steps:
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - latest
-      dockerfile: Dockerfile.backend
+      dockerfile: backend/Dockerfile
       context: .
       access_key:
         from_secret: ecr_access_key
@@ -49,7 +50,7 @@ steps:
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - latest
-      dockerfile: Dockerfile.frontend
+      dockerfile: frontend/Dockerfile
       context: .
       access_key:
         from_secret: ecr_access_key
@@ -153,7 +154,7 @@ steps:
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - prod-latest
-      dockerfile: Dockerfile.backend
+      dockerfile: backend/Dockerfile
       context: .
       access_key:
         from_secret: ecr_access_key
@@ -169,7 +170,7 @@ steps:
       tags:
         - git-${DRONE_COMMIT_SHA:0:7}
         - prod-latest
-      dockerfile: Dockerfile.frontend
+      dockerfile: frontend/Dockerfile
       context: .
       access_key:
         from_secret: ecr_access_key

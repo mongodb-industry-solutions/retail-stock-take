@@ -27,7 +27,7 @@ Browser ── http://frontend.localtest.me
   │  WebSocket ──▶ http://powersync.localtest.me
   ▼
 backend (FastAPI)
-  ├─ Ollama (host) ── CV → structured JSON inventory
+  ├─ Ollama (in-cluster) ── CV → structured JSON inventory
   ├─ MongoDB Enterprise RS  (MCK operator, self-hosted Ops Manager — in-cluster)
   └─ SeaweedFS (S3 gateway) ── raw frame storage
 MongoDB change stream → PowerSync → WebSocket → browser SQLite (wa-sqlite / OPFS)
@@ -48,13 +48,13 @@ stream → PowerSync → browser re-renders.
 - FastAPI + Python 3.13 + `uv`
 - Next.js 16 (App Router, JS) + LeafyGreen + Tailwind 4
 - `@powersync/web` + `@journeyapps/wa-sqlite` (OPFS)
-- Ollama / Qwen2.5-VL 7B (host machine)
+- Ollama (in-cluster; Moondream primary, Qwen2.5-VL 7B optional)
 - kind (local Kubernetes)
 
 ## Quick start
 
 **No external cloud account is required** — the control plane (Ops Manager) runs
-inside the kind cluster. See **[`RUN_LOCAL.md`](RUN_LOCAL.md)** for the full guide:
+inside the kind cluster. See **[`docs/RUN_LOCAL.md`](docs/RUN_LOCAL.md)** for the full guide:
 prerequisites, expected timings, caveats, and troubleshooting.
 
 ```bash
@@ -96,7 +96,7 @@ backend/       FastAPI: api/, cv/, db/, storage/ (S3 adapter), retention/
 frontend/      Next.js client; PowerSync schema in lib/powersync/schema.js
 powersync/     powersync.yaml + sync-rules.yaml
 infra/k8s/     kind manifests (operator, MongoDB, SeaweedFS, ingress, access/ NodePorts)
-deploy/local/  Helm values for the local kind stack
+infra/local/  Helm values for the local kind stack
 scripts/       lib.sh (shared helpers) + setup/preflight/verify/reset/pull-models
 docs/          Architecture and troubleshooting notes
 ```

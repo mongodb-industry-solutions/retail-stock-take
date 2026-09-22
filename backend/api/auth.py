@@ -71,18 +71,18 @@ async def jwks():
 
 
 @router.post("/api/auth/token")
-async def issue_token(operator_id: str | None = None):
+async def issue_token():
     """
     Issue a short-lived JWT for the PowerSync client.
 
-    Phase 1: anonymous demo. `operator_id` defaults to a stable demo user.
+    Phase 1: anonymous demo — a stable demo operator user.
     Phase 2: this will read a real session/credentials and set per-user claims.
     """
     if _private_key is None:
         raise HTTPException(503, "keys not loaded")
 
     now = int(time.time())
-    operator = operator_id or os.environ.get("DEMO_OPERATOR", "demo-operator")
+    operator = os.environ.get("DEMO_OPERATOR", "demo-operator")
 
     payload = {
         "sub": operator,

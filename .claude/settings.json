@@ -3,9 +3,7 @@
     "defaultMode": "default",
     "deny": [
       "Read(./.env)",
-      "Read(./.env.*)",
       "Read(**/.env)",
-      "Read(**/.env.*)",
       "Read(**/secrets/**)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
@@ -34,9 +32,7 @@
       "Read(**/.gitconfig)",
 
       "Edit(./.env)",
-      "Edit(./.env.*)",
       "Edit(**/.env)",
-      "Edit(**/.env.*)",
       "Edit(**/secrets/**)",
       "Edit(**/*.pem)",
       "Edit(**/*.key)",

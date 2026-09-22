@@ -18,14 +18,16 @@ _collection = os.environ.get("APP_COLLECTION", "inventory_captures")
 _max_bytes = int(os.environ.get("MAX_UPLOAD_BYTES", "10485760"))
 _retention_days = int(os.environ.get("RETENTION_DAYS", "7"))
 _retention_class = os.environ.get("RETENTION_CLASS", "standard")
+# Base key prefix for uploaded frames. Default "raw/" preserves local SeaweedFS
+_upload_prefix = os.environ.get("STORAGE_UPLOAD_PREFIX", "raw/")
 
 _EXT_BY_TYPE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
 def _raw_key(store_id: str, device_id: str, capture_id: str, ext: str, now: datetime) -> str:
-    # raw/{storeId}/{deviceId}/YYYY/MM/DD/HH/{captureId}.{ext}
+    # {prefix}{storeId}/{deviceId}/YYYY/MM/DD/HH/{captureId}.{ext}
     # (crops/... is reserved for a future detection pass.)
-    return f"raw/{store_id}/{device_id}/{now:%Y/%m/%d/%H}/{capture_id}.{ext}"
+    return f"{_upload_prefix}{store_id}/{device_id}/{now:%Y/%m/%d/%H}/{capture_id}.{ext}"
 
 
 @router.post("/api/inventory/capture", status_code=201)
