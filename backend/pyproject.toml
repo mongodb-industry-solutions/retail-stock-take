@@ -16,7 +16,6 @@ dependencies = [
     "pydantic>=2.9.0",
     "boto3>=1.35.70",
     "botocore>=1.35.70",
-    "voyageai>=0.3.2",
 ]
 
 [dependency-groups]

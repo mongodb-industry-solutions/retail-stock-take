@@ -1,19 +1,13 @@
-# Kanopy
-knowledge_base_kanopy/
+# Kanopy (included in template, ignored in derived repos)
+KANOPY_DEPLOYMENT_README.md
 
-# Security checks
+# Security checks (included in template, ignored in derived repos)
 security_check.sh
 SECURITY_CHECK_README.md
 
 # Git hooks (included in template, ignored in derived repos)
 setup-hooks.sh
 .githooks/
-
-# Kanopy
-
-./KANOPY_DEPLOYMENT_README.md
-.drone-multicontainer-pods.yml
-.drone-seperate-pods.yml
 
 # claude
 **/.claude
