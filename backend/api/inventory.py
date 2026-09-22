@@ -1,11 +1,13 @@
 import asyncio
 import hashlib
 import logging
+import mimetypes
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 
 from cv import CV_FALLBACK, CV_MODEL, CVError, analyze_shelf_image
 from db.mdb import MongoDBConnector
@@ -137,3 +139,31 @@ async def capture(
     doc["asset"]["checksum"] = checksum
 
     return doc
+
+
+@router.get("/api/inventory/{capture_id}/image")
+async def capture_image(capture_id: str):
+    """Serve the raw captured frame for a capture by id (read-only).
+
+    The browser can't derive a URL from the synced row (asset isn't synced), so
+    it asks the backend for the frame by capture id.
+    """
+    if not storage_enabled():
+        raise HTTPException(404, "photo store disabled")
+    docs = MongoDBConnector().find(_collection, {"_id": capture_id})
+    if not docs:
+        raise HTTPException(404, "capture not found")
+    asset = (docs[0] or {}).get("asset")
+    if not asset or not asset.get("key"):
+        raise HTTPException(404, "capture has no stored frame")
+    try:
+        data = get_storage_adapter().get_object(asset["key"])
+    except Exception as e:  # noqa: BLE001 — missing/transient frame is not fatal
+        log.warning("get_object(%s) failed: %s", asset["key"], e)
+        raise HTTPException(404, "frame not found") from e
+    media_type = (
+        asset.get("media_type")
+        or mimetypes.guess_type(asset["key"])[0]
+        or "application/octet-stream"
+    )
+    return Response(content=data, media_type=media_type)
