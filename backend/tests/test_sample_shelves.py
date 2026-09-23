@@ -4,7 +4,6 @@ These avoid TestClient/lifespan (which would need a live Mongo) and call the
 router functions directly against a stubbed StorageAdapter.
 """
 import asyncio
-from datetime import datetime
 
 import pytest
 from fastapi import HTTPException
@@ -29,14 +28,14 @@ class _FakeAdapter:
 
 def test_raw_key_uses_upload_prefix(monkeypatch):
     monkeypatch.setattr(inventory, "_upload_prefix", "industry/mobile/retail-stock-take/uploads/")
-    key = inventory._raw_key("s1", "d1", "c1", "jpg", datetime(2026, 1, 2, 3, 30))
-    assert key == "industry/mobile/retail-stock-take/uploads/s1/d1/2026/01/02/03/c1.jpg"
+    key = inventory._raw_key("c1", "jpg")
+    assert key == "industry/mobile/retail-stock-take/uploads/c1.jpg"
 
 
 def test_raw_key_default_prefix(monkeypatch):
     monkeypatch.setattr(inventory, "_upload_prefix", "raw/")
-    key = inventory._raw_key("s1", "d1", "c1", "jpg", datetime(2026, 1, 2, 3, 30))
-    assert key == "raw/s1/d1/2026/01/02/03/c1.jpg"
+    key = inventory._raw_key("c1", "jpg")
+    assert key == "raw/c1.jpg"
 
 
 def test_list_disabled(monkeypatch):

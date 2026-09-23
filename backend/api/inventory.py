@@ -26,10 +26,10 @@ _upload_prefix = os.environ.get("STORAGE_UPLOAD_PREFIX", "raw/")
 _EXT_BY_TYPE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
-def _raw_key(store_id: str, device_id: str, capture_id: str, ext: str, now: datetime) -> str:
-    # {prefix}{storeId}/{deviceId}/YYYY/MM/DD/HH/{captureId}.{ext}
+def _raw_key(capture_id: str, ext: str) -> str:
+    # {prefix}{captureId}.{ext} — flat, no store/device/date nesting.
     # (crops/... is reserved for a future detection pass.)
-    return f"{_upload_prefix}{store_id}/{device_id}/{now:%Y/%m/%d/%H}/{capture_id}.{ext}"
+    return f"{_upload_prefix}{capture_id}.{ext}"
 
 
 @router.post("/api/inventory/capture", status_code=201)
@@ -80,7 +80,7 @@ async def capture(
 
     ext = _EXT_BY_TYPE.get(content_type, "jpg")
     adapter = get_storage_adapter()
-    key = _raw_key(store_id, device_id, capture_id, ext, now)
+    key = _raw_key(capture_id, ext)
     expires_at = now + timedelta(days=_retention_days)
 
     # (1) Persist metadata FIRST as PENDING_UPLOAD. If the process dies before
