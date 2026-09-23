@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 import Button from '@leafygreen-ui/button';
 import Icon from '@leafygreen-ui/icon';
 import { Banner } from '@leafygreen-ui/banner';
-import { Body, Description } from '@leafygreen-ui/typography';
+import Modal from '@leafygreen-ui/modal';
+import { Body, Description, Overline } from '@leafygreen-ui/typography';
 import { useCapture } from './useCapture';
 import { useSampleShelves } from './useSampleShelves';
 
@@ -18,6 +19,7 @@ export function CaptureForm() {
   const [dragging, setDragging] = useState(false);
   const [pickingName, setPickingName] = useState(null);
   const [sampleError, setSampleError] = useState(null);
+  const [sampleOpen, setSampleOpen] = useState(false);
 
   function applyFile(f) {
     setFile(f);
@@ -71,6 +73,7 @@ export function CaptureForm() {
       applyFile(f); // show in the dropzone
       await submit(f); // same capture -> CV -> store -> sync path
       clearFile();
+      setSampleOpen(false);
     } catch (e) {
       setSampleError(String(e?.message || e));
     } finally {
@@ -131,55 +134,66 @@ export function CaptureForm() {
             {fileName}
           </Body>
         )}
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={busy || !fileName}
-          isLoading={busy}
-          loadingText="Analyzing…"
-          leftGlyph={<Icon glyph="Camera" />}
-          className="ml-auto"
-        >
-          Capture
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {samples.enabled && (
+            <Button
+              type="button"
+              variant="default"
+              leftGlyph={<Icon glyph="Copy" />}
+              onClick={() => setSampleOpen(true)}
+              disabled={busy}
+            >
+              Sample
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !fileName}
+            isLoading={busy}
+            loadingText="Analyzing…"
+            leftGlyph={<Icon glyph="Camera" />}
+          >
+            Capture
+          </Button>
+        </div>
       </div>
 
-      {/* Curated sample shelves (cloud only) */}
-      {samples.enabled && (
-        <div
-          className="pt-2 border-t"
-          style={{ borderColor: 'var(--mdb-border)' }}
-        >
-          <Description style={{ marginBottom: 8 }}>Or pick a sample shelf</Description>
-          {sampleError && <Banner variant="danger">{sampleError}</Banner>}
-          {samples.error && <Banner variant="warning">{samples.error}</Banner>}
-          {samples.loading ? (
-            <Description style={{ color: 'var(--mdb-muted)' }}>Loading…</Description>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {samples.items.map((s) => (
-                <button
-                  key={s.name}
-                  type="button"
-                  onClick={() => pickSample(s.name)}
-                  disabled={busy || pickingName !== null}
-                  className="rounded overflow-hidden focus:outline-none disabled:opacity-60"
-                  style={{ border: '1px solid var(--mdb-border)' }}
-                  title={s.name}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/sample-shelves/image?name=${encodeURIComponent(s.name)}`}
-                    alt={s.name}
-                    className="w-full aspect-square object-cover"
-                    style={{ display: 'block' }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Curated sample shelves (cloud only) — opened by the Sample button */}
+      <Modal open={sampleOpen} setOpen={setSampleOpen} size="default">
+        <Overline style={{ color: 'var(--mdb-muted)', marginBottom: 12, display: 'block' }}>
+          Pick a sample shelf
+        </Overline>
+        {sampleError && <Banner variant="danger">{sampleError}</Banner>}
+        {samples.error && <Banner variant="warning">{samples.error}</Banner>}
+        {samples.loading ? (
+          <Description style={{ color: 'var(--mdb-muted)' }}>Loading…</Description>
+        ) : samples.items.length === 0 ? (
+          <Description style={{ color: 'var(--mdb-muted)' }}>No sample shelves</Description>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {samples.items.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                onClick={() => pickSample(s.name)}
+                disabled={busy || pickingName !== null}
+                className="rounded overflow-hidden focus:outline-none disabled:opacity-60"
+                style={{ border: '1px solid var(--mdb-border)' }}
+                title={s.name}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/sample-shelves/image?name=${encodeURIComponent(s.name)}`}
+                  alt={s.name}
+                  className="w-full aspect-square object-cover"
+                  style={{ display: 'block' }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       {error && <Banner variant="danger">{error}</Banner>}
       {lastResult && !error && (
