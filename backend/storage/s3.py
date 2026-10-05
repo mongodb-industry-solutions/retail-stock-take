@@ -5,7 +5,7 @@ One implementation serves both backends:
   - CLOUD  : AWS S3 — no endpoint, no static keys (boto3's default credential
              chain resolves IRSA on Kanopy), virtual-host addressing.
 
-Only the common S3 subset is used (Put/Get/Head/Delete/ListV2 + presign).
+Only the common S3 subset is used (Put/Get/Head/Delete/ListV2).
 """
 from __future__ import annotations
 
@@ -118,8 +118,3 @@ class S3StorageAdapter(StorageAdapter):
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             keys.extend(obj["Key"] for obj in page.get("Contents", []))
         return keys
-
-    def create_presigned_url(self, key, ttl_seconds=3600, method="get_object") -> str:
-        return self._client.generate_presigned_url(
-            method, Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=ttl_seconds
-        )

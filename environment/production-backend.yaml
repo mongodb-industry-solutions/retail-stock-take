@@ -1,7 +1,10 @@
 # Backend (production). Loaded after environment/production.yaml.
 # Namespace prerequisites: secret retail-stock-take (keys MONGODB_URI +
 # GROVE_API_KEY) and secret jwt-keys (jwt-private.pem + jwt-public.pem).
-# No S3 bucket / S3 IRSA needed — photo store disabled (STORAGE_PROVIDER=none).
+# Photo store on against AWS S3: frames → industry-solutions-demos/uploads/,
+# 3-month retention (object + doc). The IRSA role (kanopy-prod-cicd-irsa) needs
+# S3 access to that prefix; the curated sample-shelves prefix is read via
+# /api/sample-shelves.
 services:
   - name: http
     port: 80
@@ -15,10 +18,14 @@ env:
   DATABASE_NAME: retail-stock-take
   APP_NAME: retail-stock-take-backend
   APP_COLLECTION: inventory_captures
-  # Photo store disabled in cloud for now — metadata only (doc.asset is null).
-  # Re-enable with STORAGE_PROVIDER=s3 + STORAGE_BUCKET + S3 IRSA permissions.
-  STORAGE_PROVIDER: none
-  RETENTION_DAYS: "30"
+  # Photo store on against AWS S3 (IRSA via the default credential chain). Frames
+  # go to STORAGE_UPLOAD_PREFIX (sibling of sample-shelves/); the reconciler
+  # deletes object + doc past RETENTION_DAYS (3 months).
+  STORAGE_PROVIDER: s3
+  STORAGE_BUCKET: industry-solutions-demos
+  STORAGE_UPLOAD_PREFIX: industry/mobile/retail-stock-take/uploads/
+  STORAGE_SAMPLES_PREFIX: industry/mobile/retail-stock-take/sample-shelves/
+  RETENTION_DAYS: "90"
   RECONCILER_INTERVAL_SECONDS: "300"
   JWT_PRIVATE_KEY_PATH: /secrets/jwt-private.pem
   JWT_PUBLIC_KEY_PATH: /secrets/jwt-public.pem

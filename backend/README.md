@@ -7,13 +7,13 @@ the JWTs PowerSync trusts, and runs the retention reconciler.
 It is **internal-only**: the browser never calls it directly — it's reached through
 the frontend's same-origin `/api/*` proxy and over in-cluster DNS (PowerSync →
 JWKS). For the project overview see [`../README.md`](../README.md); to run the
-whole stack locally see [`../RUN_LOCAL.md`](../RUN_LOCAL.md).
+whole stack locally see [`../docs/RUN_LOCAL.md`](../docs/RUN_LOCAL.md).
 
 ## Structure
 
 ```
 api/         routes — auth (token/keys), health, inventory capture
-cv/          Ollama client + strict-JSON prompt (qwen2.5vl:7b, moondream fallback)
+cv/          Ollama client + strict-JSON prompt (moondream primary; qwen2.5vl optional)
 db/          mdb.py (Mongo connector) + bootstrap.py (startup assertions)
 storage/     vendor-agnostic S3 adapter — get_storage_adapter() (boto3; common S3 subset)
 retention/   reconciler (promotes/expires docs, deletes objects past expires_at)
@@ -40,12 +40,12 @@ main.py      app wiring + startup hooks
 ## Config
 
 Env-driven; the contract is documented in the root `.env.example`. Local cluster
-values live in `deploy/local/backend.yaml`, cloud values in `environment/*.yaml`.
+values live in `infra/local/backend.yaml`, cloud values in `environment/*.yaml`.
 
 ## Local dev
 
 Normally the backend runs **inside the kind cluster** via `./scripts/setup.sh`
-(builds `Dockerfile.backend`). To iterate on it directly:
+(builds `backend/Dockerfile`). To iterate on it directly:
 
 ```bash
 make uv_sync                 # install deps into backend/.venv
@@ -54,4 +54,4 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 It needs `MONGODB_URI`, the JWT key paths, and `STORAGE_*` / `OLLAMA_*` env set —
-see `deploy/local/backend.yaml` for the full list.
+see `infra/local/backend.yaml` for the full list.

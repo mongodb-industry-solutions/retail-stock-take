@@ -1,5 +1,5 @@
-"""Startup checks. Self-bootstrapping so the same code works locally (mongo-init
-pre-creates the collection) and in cloud/Atlas (no mongo-init; Atlas creates
+"""Startup checks. Self-bootstrapping so the same code works locally (the post-init
+Job pre-creates the collection) and in cloud/Atlas (no post-init Job; Atlas creates
 collections lazily)."""
 import logging
 import os
@@ -23,7 +23,7 @@ def ensure_collection_ready() -> None:
     collection already exists without pre/post images, we fall back to `collMod`,
     which requires `dbAdmin`; if the user lacks it we log a clear warning rather
     than crash (PowerSync's `post_images: auto_configure` can also enable it).
-    Locally this is a no-op — mongo-init already created it with pre/post images.
+    Locally this is a no-op — the post-init Job already created it with pre/post images.
     """
     coll_name = os.environ.get("APP_COLLECTION", "inventory_captures")
     mdb = MongoDBConnector()
@@ -31,7 +31,7 @@ def ensure_collection_ready() -> None:
     infos = list(mdb.db.list_collections(filter={"name": coll_name}))
     if not infos:
         log.info(
-            "collection %s.%s missing — creating it with pre/post images (no mongo-init in cloud)",
+            "collection %s.%s missing — creating it with pre/post images (no post-init Job in cloud)",
             mdb.database_name, coll_name,
         )
         try:

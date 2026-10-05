@@ -46,13 +46,14 @@ backend (FastAPI)
 This is **retry-safe**: a crash between steps leaves a reconcilable record. The
 retention reconciler (`backend/retention/`) promotes stuck `PENDING_UPLOAD` docs
 (or deletes abandoned ones) and **expires** `ACTIVE` docs past `expires_at` by
-deleting the object and marking the doc `DELETED`. Retention is enforced by the
-reconciler, **not** by bucket lifecycle (kept backend-agnostic).
+deleting the object **and** the doc. Retention is enforced by the reconciler,
+**not** by bucket lifecycle (kept backend-agnostic).
 
 ## Idempotent write FSM
 
-`PENDING_UPLOAD → ACTIVE → DELETED`. The synced `status` column lets clients
-observe the lifecycle. The detailed `asset` sub-document stays server-side for now.
+`PENDING_UPLOAD → ACTIVE`; on expiry the reconciler **removes the doc** (no
+`DELETED` tombstone persists — the change stream emits a delete op so clients
+drop the row). The detailed `asset` sub-document stays server-side until then.
 
 ## Services (local kind)
 
@@ -63,13 +64,13 @@ observe the lifecycle. The detailed `asset` sub-document stays server-side for n
 | MongoDB | Enterprise 8.0.9-ent (operator) | Single-node replica set; source DB + PowerSync bucket DB. |
 | mongot (Search) | `MongoDBSearch` ~0.64.0 (**Preview**) | Self-hosted `$vectorSearch` / `$search`. **Deferred** locally — needs MongoDB 8.2+; Ops Manager 8.0 provisions 8.0.9-ent. |
 | SeaweedFS | `chrislusf/seaweedfs` (`weed server -s3`) | Local S3 gateway (the AWS S3 stand-in). S3 on :8333, filer UI on :8888 (dev tooling). |
-| backend | local `Dockerfile.backend` | FastAPI: auth, health, inventory ingest, storage adapter, reconciler. Internal Service (no ingress). |
+| backend | local `backend/Dockerfile` | FastAPI: auth, health, inventory ingest, storage adapter, reconciler. Internal Service (no ingress). |
 | powersync | `journeyapps/powersync-service:1.21.0` | Replication + sync API (unified). Config from a ConfigMap. |
-| frontend | local `Dockerfile.frontend` | Next.js (standalone), COOP/COEP headers, `/api/*` proxy. |
-| Ollama | `ollama/ollama:latest` | In-cluster VLM server (CPU inference). Moondream primary, qwen2.5vl:7b fallback. OLLAMA_ORIGINS baked in — no host process needed. Models on a 10 Gi PVC. |
+| frontend | local `frontend/Dockerfile` | Next.js (standalone), COOP/COEP headers, `/api/*` proxy. |
+| Ollama | `ollama/ollama:latest` | In-cluster VLM server (CPU inference). Moondream primary; qwen2.5vl:7b optional (set OLLAMA_FALLBACK_MODEL). OLLAMA_ORIGINS baked in — no host process needed. Models on a 10 Gi PVC. |
 
 backend / frontend / powersync all deploy through the **same `mongodb/web-app`
-Helm chart** used on Kanopy — local (`deploy/local/*.yaml`) vs cloud
+Helm chart** used on Kanopy — local (`infra/local/*.yaml`) vs cloud
 (`environment/*.yaml`) differ only by values/secrets.
 
 ## Vendor-agnostic object storage
@@ -108,12 +109,12 @@ validates against that JWKS. Keys are mounted from the `jwt-keys` Secret. No
 Ollama runs **in-cluster** as a Deployment (`infra/k8s/ollama/ollama.yaml`).
 No host Ollama process is needed. Docker Desktop on Mac runs containers
 CPU-only (no Metal/MPS pass-through), so `moondream` (~10–30 s/capture) is
-the practical primary model; `qwen2.5vl:7b` is the fallback. `OLLAMA_ORIGINS`
+the practical primary model; `qwen2.5vl:7b` is optional. `OLLAMA_ORIGINS`
 is baked into the manifest, so the Host-header DNS-rebinding check never blocks
 in-cluster requests. Models persist on a 10 Gi PVC and survive pod restarts.
 Strict-JSON prompt + Pydantic validation; 503 on failure rather than writing garbage.
 **Cloud has no Ollama** — the capture CV step is local-only until a cloud provider
-(e.g. Bedrock — deps already present) is wired. Storage + sync work everywhere;
+(e.g. Bedrock — deps would need re-adding) is wired. Storage + sync work everywhere;
 **Vector Search is a Preview feature deferred on the local stack** (it needs
 MongoDB 8.2+, while the in-cluster Ops Manager 8.0 provisions 8.0.9-ent) and
 activates once Ops Manager is upgraded. Cloud (Atlas) has native Vector Search.
@@ -125,7 +126,7 @@ backend/   — FastAPI (api/, cv/, db/, storage/, retention/)
 frontend/  — Next.js client; AppSchema lives in lib/powersync/schema.js
 powersync/ — powersync.yaml + sync-rules.yaml (mounted via ConfigMap)
 infra/k8s/ — kind manifests (operator, ops-manager, mongodb, seaweedfs, ingress, access/)
-deploy/local/   — web-app Helm values for local (kind)
+infra/local/   — web-app Helm values for local (kind)
 environment/    — web-app Helm values for Kanopy (base + per-service)
 .drone.yml      — Kanopy CI/CD (separate pods, 3 releases)
 ```

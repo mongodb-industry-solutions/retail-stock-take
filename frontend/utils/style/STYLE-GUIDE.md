@@ -1,6 +1,6 @@
 # Demo Template Style Guide
 
-This web app is built with Next.js 15 (App Router) and JavaScript.
+This web app is built with Next.js 16 (App Router) and JavaScript.
 Keep the code clean, simple, and efficient.
 Follow general coding best practices.
 

@@ -44,9 +44,6 @@ def test_common_s3_subset_roundtrip():
     assert "raw/store1/dev1/2026/06/05/10/cap.jpg" in keys
     assert "raw/store1/dev1/2026/06/05/10/cap2.jpg" in keys
 
-    url = a.create_presigned_url("raw/store1/dev1/2026/06/05/10/cap.jpg", 60)
-    assert "cap.jpg" in url
-
     a.delete_object("raw/store1/dev1/2026/06/05/10/cap.jpg")
     assert a.head_object("raw/store1/dev1/2026/06/05/10/cap.jpg") is None
     a.delete_object("raw/store1/dev1/2026/06/05/10/cap.jpg")  # idempotent: no error

@@ -35,16 +35,10 @@ class MongoDBConnector:
         result = collection.insert_one(document)
         return result.inserted_id
 
-    def insert_many(self, collection_name, documents):
-        """Insert multiple documents into a collection."""
-        collection = self.get_collection(collection_name)
-        result = collection.insert_many(documents)
-        return result.inserted_ids
-
-    def find(self, collection_name, query={}, projection=None):
+    def find(self, collection_name, query={}):
         """Retrieve documents from a collection."""
         collection = self.get_collection(collection_name)
-        return list(collection.find(query, projection))
+        return list(collection.find(query))
 
     def update_one(self, collection_name, query, update, upsert=False):
         """Update a single document in a collection."""
@@ -52,20 +46,8 @@ class MongoDBConnector:
         result = collection.update_one(query, update, upsert=upsert)
         return result.modified_count
 
-    def update_many(self, collection_name, query, update, upsert=False):
-        """Update multiple documents in a collection."""
-        collection = self.get_collection(collection_name)
-        result = collection.update_many(query, update, upsert=upsert)
-        return result.modified_count
-
     def delete_one(self, collection_name, query):
         """Delete a single document from a collection."""
         collection = self.get_collection(collection_name)
         result = collection.delete_one(query)
-        return result.deleted_count
-
-    def delete_many(self, collection_name, query):
-        """Delete multiple documents from a collection."""
-        collection = self.get_collection(collection_name)
-        result = collection.delete_many(query)
         return result.deleted_count

@@ -8,6 +8,7 @@ import { Badge } from '@leafygreen-ui/badge';
 import Button from '@leafygreen-ui/button';
 import Icon from '@leafygreen-ui/icon';
 import Modal from '@leafygreen-ui/modal';
+import { Tabs, Tab } from '@leafygreen-ui/tabs';
 import { useInventory } from '@/components/inventory/useInventory';
 import { CaptureForm } from '@/components/capture/CaptureForm';
 import { InventoryList } from '@/components/inventory/InventoryList';
@@ -22,6 +23,7 @@ export default function Home() {
   const { isDark, toggle } = useTheme();
   const [selectedId, setSelectedId] = useState(null);
   const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [rightTab, setRightTab] = useState('Document');
 
   useEffect(() => {
     if (!rows?.length) {
@@ -144,12 +146,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Document viewer */}
-          <div className="flex-1 overflow-auto px-5 py-5">
-            <MongoDocViewer
-              doc={selectedDoc}
-              collectionName="retail_demo.inventory_captures"
-            />
+          {/* Document / Image views */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div
+              className="flex-none px-5 pt-3 border-b"
+              style={{ borderColor: 'var(--mdb-border)' }}
+            >
+              <Tabs aria-label="capture view" selected={rightTab} setSelected={setRightTab}>
+                <Tab name="Document">Document</Tab>
+                <Tab name="Image">Image</Tab>
+              </Tabs>
+            </div>
+            <div className="flex-1 overflow-auto px-5 py-5">
+              {rightTab === 'Image' ? (
+                <CaptureImageView doc={selectedDoc} />
+              ) : (
+                <MongoDocViewer
+                  doc={selectedDoc}
+                  collectionName="retail_demo.inventory_captures"
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -161,6 +178,36 @@ export default function Home() {
         </Overline>
         <SyncPanel />
       </Modal>
+    </div>
+  );
+}
+
+function CaptureImageView({ doc }) {
+  if (!doc?.id) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-10 gap-2"
+        style={{ color: 'var(--mdb-muted)' }}
+      >
+        <Icon glyph="Camera" size={32} fill="var(--mdb-muted)" />
+        <Body>Select a capture to view its image</Body>
+      </div>
+    );
+  }
+  return (
+    <div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/inventory/${doc.id}/image`}
+        alt={doc.id}
+        className="w-full object-contain rounded"
+        style={{
+          maxHeight: '72vh',
+          backgroundColor: 'var(--mdb-surface)',
+          display: 'block',
+          border: '1px solid var(--mdb-border)',
+        }}
+      />
     </div>
   );
 }

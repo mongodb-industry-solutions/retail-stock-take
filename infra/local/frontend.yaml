@@ -1,6 +1,6 @@
 # Local kind values for the Next.js frontend (mongodb/web-app chart).
 #   helm upgrade --install retail-stock-take-frontend mongodb/web-app \
-#     -n retail -f deploy/local/frontend.yaml
+#     -n retail -f infra/local/frontend.yaml
 #
 # Browser reaches this via infra/k8s/ingress (http://frontend.localtest.me).
 # The chart Service is named retail-stock-take-frontend-web-app:80.

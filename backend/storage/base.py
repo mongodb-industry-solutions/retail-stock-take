@@ -59,9 +59,3 @@ class StorageAdapter(abc.ABC):
     @abc.abstractmethod
     def list_objects(self, prefix: str = "") -> list[str]:
         """ListObjectsV2 — returns keys under an optional prefix."""
-
-    @abc.abstractmethod
-    def create_presigned_url(
-        self, key: str, ttl_seconds: int = 3600, method: str = "get_object"
-    ) -> str:
-        """Presigned URL for direct client access (use sparingly)."""

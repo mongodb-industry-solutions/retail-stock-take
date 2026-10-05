@@ -7,7 +7,7 @@ replication:
     - type: mongodb
       uri: !env PS_DATA_SOURCE_URI
       # PowerSync auto-enables changeStreamPreAndPostImages on watched
-      # collections (the mongo-init script also enables it defensively).
+      # collections (the post-init Job also enables it defensively).
       post_images: auto_configure
 
 storage:

@@ -7,7 +7,7 @@
 #
 # For each user the operator also publishes a connection-string Secret the apps
 # consume (name pattern is operator-generated, e.g. retail-mongodb-<user>-<db>);
-# the exact name must be confirmed on the live cluster and wired in deploy/local.
+# the exact name must be confirmed on the live cluster and wired in infra/local.
 #
 # PREVIEW / VERSION-SENSITIVE: confirm `spec.mongodbResourceRef` is the correct
 # field on the installed MongoDBUser CRD (`kubectl explain mongodbuser.spec`).

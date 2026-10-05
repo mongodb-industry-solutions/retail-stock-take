@@ -11,7 +11,7 @@ echo ""
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 # Path to the security check script
-SECURITY_SCRIPT="$REPO_ROOT/security_check.sh"
+SECURITY_SCRIPT="$REPO_ROOT/scripts/security_check.sh"
 
 # Check if security_check.sh exists
 if [ ! -f "$SECURITY_SCRIPT" ]; then
