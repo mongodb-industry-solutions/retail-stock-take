@@ -3,7 +3,9 @@
     "defaultMode": "default",
     "deny": [
       "Read(./.env)",
+      "Read(./.env.*)",
       "Read(**/.env)",
+      "Read(**/.env.*)",
       "Read(**/secrets/**)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
@@ -32,7 +34,9 @@
       "Read(**/.gitconfig)",
 
       "Edit(./.env)",
+      "Edit(./.env.*)",
       "Edit(**/.env)",
+      "Edit(**/.env.*)",
       "Edit(**/secrets/**)",
       "Edit(**/*.pem)",
       "Edit(**/*.key)",
@@ -58,6 +62,7 @@
       "Bash(ksec *)",
       "Bash(kubeseal:*)",
       "Bash(kubeseal *)",
+      "Bash(git commit *)",
 
       "Bash(cat *.env*)",
       "Bash(cat .env*)",
@@ -69,9 +74,6 @@
       "Bash(env)",
       "Bash(export:*)",
       "Bash(echo *)"
-    ],
-    "ask": [
-      "Bash(git commit *)"
     ]
   }
 }
