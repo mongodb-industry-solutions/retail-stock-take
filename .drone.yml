@@ -8,10 +8,10 @@
 # Prereqs (see docs/KANOPY_DEPLOYMENT_README.md + docs/architecture.md):
 #   - Drone secrets: ecr_access_key, ecr_secret_key, staging/prod kubernetes tokens
 #   - k8s secret  retail-stock-take : MONGODB_URI, PS_DATA_SOURCE_URI, PS_MONGO_URI (Atlas SRV),
-#                                             GROVE_API_KEY (Grove gateway key for cloud CV)
+#                                             GROVE_API_KEY (Grove AI Gateway key for cloud CV)
 #   - k8s secret  jwt-keys                  : jwt-private.pem + jwt-public.pem
 #   - k8s configmap powersync-config        : powersync.yaml + sync-rules.yaml
-# Cloud CV uses Grove (OpenAI-compatible VLM gateway). AWS S3 (IRSA) photo store
+# Cloud CV uses Grove's new AI Gateway (OpenAI-compatible VLM gateway). AWS S3 (IRSA) photo store
 # is ON for cloud — see docs/INTERNAL_DEPLOY_MAINTENANCE.md Prerequisites §2 for the
 # bucket + IRSA role permissions.
 kind: pipeline

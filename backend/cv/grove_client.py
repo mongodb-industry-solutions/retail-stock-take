@@ -1,9 +1,14 @@
-"""Grove CV provider — MongoDB's internal GenAI gateway (Azure-backed).
+"""Grove CV provider — MongoDB's internal GenAI gateway.
 
-Grove exposes an OpenAI-compatible, vision-capable chat/completions endpoint
-authenticated with an `api-key` header. This client mirrors the Ollama client's
-contract — `analyze_shelf_image(image_bytes, model, fallback) -> (CVResponse,
-str)` — so callers stay provider-agnostic (see `cv/__init__.py`).
+Grove exposes an OpenAI-compatible, vision-capable chat/completions endpoint.
+This client targets Grove's **new AI Gateway** (`ai-gateway.corp.mongodb.com`),
+which replaced the legacy Azure-based gateway (sunset 2026-12-01). Auth uses a
+standard `Authorization: Bearer <gateway key>` header (the legacy custom
+`api-key` header is no longer used).
+
+This client mirrors the Ollama client's contract —
+`analyze_shelf_image(image_bytes, model, fallback) -> (CVResponse, str)` — so
+callers stay provider-agnostic (see `cv/__init__.py`).
 
 The base URL, model, and API key are all provisioned per Grove request, so they
 are env-configurable. Local runs use Ollama instead; Grove is the cloud path.
@@ -27,7 +32,7 @@ log = logging.getLogger("grove")
 
 _base = os.environ.get(
     "GROVE_BASE_URL",
-    "https://grove-gateway-prod.azure-api.net/grove-foundry-prod/openai/v1",
+    "https://ai-gateway.corp.mongodb.com/openai/v1",
 ).rstrip("/")
 _api_key = os.environ.get("GROVE_API_KEY", "")
 _timeout = float(os.environ.get("GROVE_REQUEST_TIMEOUT_SECONDS", "120"))
@@ -77,7 +82,12 @@ async def _call(model: str, data_url: str) -> dict:
         "response_format": {"type": "json_object"},
         "max_completion_tokens": _max_tokens,
     }
-    headers = {"api-key": _api_key, "Content-Type": "application/json"}
+    # New AI Gateway uses standard OpenAI SDK auth (Bearer), not the legacy
+    # Azure gateway's custom `api-key` header.
+    headers = {
+        "Authorization": f"Bearer {_api_key}",
+        "Content-Type": "application/json",
+    }
     async with httpx.AsyncClient(timeout=_timeout) as client:
         try:
             r = await client.post(

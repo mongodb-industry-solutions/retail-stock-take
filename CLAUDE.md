@@ -109,11 +109,14 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   (photo uploads go to `/api/inventory/capture`).
 - MongoDB documents: `_id` is a UUID **string** (not ObjectId).
 - **CV provider is config-selected** via `CV_PROVIDER` (`backend/cv/__init__.py`):
-  local = **Ollama** (in-cluster), cloud = **Grove** (MongoDB's GenAI gateway —
-  OpenAI-compatible + vision, `api-key` header). Both share the
-  `analyze_shelf_image(bytes, model, fallback) -> (CVResponse, str)` contract and
-  a unified `CVError`. Cloud default `GROVE_MODEL=gpt-5.5`, fallback `gpt-4o`
-  (env-overridable); `GROVE_API_KEY` from `retail-stock-take`. Add a new
+  local = **Ollama** (in-cluster, `qwen2.5vl:3b`), cloud = **Grove** (MongoDB's
+  GenAI gateway — OpenAI-compatible + vision). Targets Grove's **new AI Gateway**
+  (`GROVE_BASE_URL=https://ai-gateway.corp.mongodb.com/openai/v1`) with
+  `Authorization: Bearer` auth (the legacy Azure `api-key` header is gone). Both
+  share the `analyze_shelf_image(bytes, model, fallback) -> (CVResponse, str)`
+  contract and a unified `CVError`. Cloud default `GROVE_MODEL=gpt-5.5`, fallback
+  `gpt-4o` (env-overridable; confirm IDs against `GET /openai/v1/models`);
+  `GROVE_API_KEY` (a new gateway key) from `retail-stock-take`. Add a new
   provider = new `cv/<name>_client.py` + a branch in `cv/__init__.py`.
 
 ## Tech stack (pinned)
