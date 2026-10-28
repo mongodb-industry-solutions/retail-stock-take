@@ -298,6 +298,13 @@ for svc in backend frontend powersync; do
 done
 
 # ===========================================================================
+step "sample-shelf gallery (local)"
+# Seed ./sample-shelves/ into SeaweedFS so the local "Sample" picker matches the
+# deployed demo. The backend creates the store-media bucket at startup, so this
+# runs after the rollout wait above.
+"$ROOT/scripts/seed-samples.sh" || warn "sample-shelf seed failed — gallery may be empty"
+
+# ===========================================================================
 step "ollama models (in-cluster)"
 if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
   ok "${OLLAMA_MODEL:-moondream} already present"

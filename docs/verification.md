@@ -10,8 +10,9 @@ Phase 1 is "done" when this checklist passes on a freshly brought-up kind cluste
 
 Runs: ingress/health through the proxy, **host-access ports** (27017/8080/8333),
 MongoDB CR status, `changeStreamPreAndPostImages` assertion, JWKS + JWT issuance,
-the SeaweedFS storage round-trip, a real photo capture (if a sample exists), and
-the retention reconciler. Exits non-zero on any hard failure with debug hints.
+the SeaweedFS storage round-trip, the sample-shelf gallery (`/api/sample-shelves`),
+a real photo capture (if a sample exists), and the retention reconciler. Exits
+non-zero on any hard failure with debug hints.
 Vector search / MongoDBSearch is reported as a non-fatal **WARN** (deferred — it
 needs MongoDB 8.2+, while the in-cluster Ops Manager 8.0 provisions 8.0.9-ent).
 
@@ -52,6 +53,10 @@ open http://localhost:8080
 # S3 (SeaweedFS):
 AWS_ACCESS_KEY_ID=retaildemo AWS_SECRET_ACCESS_KEY=retaildemo-secret \
   aws s3 ls s3://store-media/ --endpoint-url http://localhost:8333 --region us-east-1
+
+# Sample-shelf gallery (seeded from sample-shelves/ by setup.sh):
+curl -s http://localhost/api/sample-shelves | jq
+# expect: {"enabled":true,"items":[ … one entry per image in sample-shelves/ … ]}
 ```
 
 If any of these fail, the kind port-mappings aren't in place — `make reset && make

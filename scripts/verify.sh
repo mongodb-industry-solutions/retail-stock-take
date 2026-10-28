@@ -109,8 +109,17 @@ else
   fail "storage adapter round-trip failed"
 fi
 
+step "sample-shelf gallery (via proxy)"
+GAL="$(curl -s -m 5 "$FRONT/api/sample-shelves" 2>/dev/null)"
+if printf '%s' "$GAL" | grep -q '"enabled":true'; then
+  N=$(printf '%s' "$GAL" | grep -o '"name"' | wc -l | tr -d ' ')
+  pass "gallery enabled (${N} sample(s))"
+else
+  warn "sample-shelf gallery disabled/empty — add images to sample-shelves/ and run scripts/seed-samples.sh"
+fi
+
 step "capture flow (best-effort; needs Ollama)"
-SAMPLE=$(ls scripts/sample-photos/*.{jpg,jpeg,png} 2>/dev/null | head -1 || true)
+SAMPLE=$(ls sample-shelves/*.{jpg,jpeg,png} 2>/dev/null | head -1 || true)
 if [ -n "$SAMPLE" ]; then
   RESP=$(curl -s -o /tmp/retail_capture.json -w '%{http_code}' \
     -F "photo=@${SAMPLE}" -F "device_id=verify" -F "operator_id=verify" -F "store_id=verify-store" \
@@ -124,7 +133,7 @@ if [ -n "$SAMPLE" ]; then
     fail "capture returned HTTP $RESP"
   fi
 else
-  warn "no sample photo in scripts/sample-photos/ — skipping capture"
+  warn "no sample photo in sample-shelves/ — skipping capture"
 fi
 
 step "retention reconciler (run once)"

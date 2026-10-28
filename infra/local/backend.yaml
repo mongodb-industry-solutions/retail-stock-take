@@ -45,6 +45,11 @@ env:
   STORAGE_ACCESS_KEY: retaildemo
   STORAGE_SECRET_KEY: retaildemo-secret
   STORAGE_FORCE_PATH_STYLE: "true"
+  # Curated sample-shelf gallery served read-only by /api/sample-shelves.
+  # Seeded from ./sample-shelves/ into the store-media bucket by
+  # scripts/seed-samples.sh (invoked from setup.sh). Empty value hides the
+  # gallery in the UI.
+  STORAGE_SAMPLES_PREFIX: sample-shelves/
   # retention
   RETENTION_DAYS: "7"
   RETENTION_CLASS: standard
