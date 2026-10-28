@@ -18,6 +18,10 @@ _response_schema = CVResponse.model_json_schema()
 # Bounded same-model retries: a single malformed/truncated generation is common
 # for small VLMs, so retry the primary before giving up on the capture.
 _max_attempts = int(os.environ.get("CV_MAX_ATTEMPTS", "2"))
+# Generation bounds. num_predict caps the (schema-constrained) output so a
+# runaway generation can't balloon latency; both are env-tunable per host.
+_num_ctx = int(os.environ.get("OLLAMA_NUM_CTX", "4096"))
+_num_predict = int(os.environ.get("OLLAMA_NUM_PREDICT", "1024"))
 
 
 class OllamaError(RuntimeError):
@@ -37,7 +41,7 @@ async def _call(model: str, image_b64: str) -> dict:
         # into a runaway generation that gets cut off mid-string.
         "format": _response_schema,
         "stream": False,
-        "options": {"num_ctx": 4096, "num_predict": 1024},
+        "options": {"num_ctx": _num_ctx, "num_predict": _num_predict},
     }
     async with httpx.AsyncClient(timeout=_timeout) as client:
         try:

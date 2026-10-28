@@ -18,7 +18,7 @@ Keep it light — a handful of images is plenty (this repo ships **4**).
 - Formats: `.jpg` / `.jpeg` / `.png`. The filename becomes the label shown in
   the picker, so name them meaningfully (e.g. `cereal-aisle.jpg`).
 - Prefer **stocked** shelves with visible products — the local CV model
-  (Ollama / Moondream) is weaker than the cloud one and returns few or zero
+  (Ollama / Qwen2.5-VL) is weaker than the cloud one and returns few or zero
   items for empty/blank shelves.
 - Keep files reasonably small (a few hundred KB each) — they are committed.
 

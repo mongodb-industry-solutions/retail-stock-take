@@ -13,7 +13,7 @@ whole stack locally see [`../docs/RUN_LOCAL.md`](../docs/RUN_LOCAL.md).
 
 ```
 api/         routes — auth (token/keys), health, inventory capture
-cv/          Ollama client + strict-JSON prompt (moondream primary; qwen2.5vl optional)
+cv/          Ollama client + strict-JSON prompt (qwen2.5vl:3b primary) + tolerant parse
 db/          mdb.py (Mongo connector) + bootstrap.py (startup assertions)
 storage/     vendor-agnostic S3 adapter — get_storage_adapter() (boto3; common S3 subset)
 retention/   reconciler (promotes/expires docs, deletes objects past expires_at)

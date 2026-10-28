@@ -27,8 +27,8 @@ air-gapped after images are pulled.
   16 GB. Ollama adds ~2 GB requests.
 - **~15 GB free disk** for Docker images and kind node layers (Ops Manager image
   is large).
-- **~2 GB extra** for the Moondream model (downloaded into the Ollama PVC on
-  first run).
+- **~2.5 GB extra** for the Qwen2.5-VL 3B model (downloaded into the Ollama PVC
+  on first run).
 
 ### Host ports the cluster publishes
 
@@ -60,13 +60,16 @@ Cloudflare WARP, Slack, and browser UDP connections to remote port 443 are
 ### Ollama (CV)
 
 Ollama runs **inside the kind cluster** — no host installation needed. The setup
-script deploys it and pulls `moondream` (~1.5 GB) **before setup finishes**, so CV
-is usable as soon as the stack is up. (The `ollama/ollama` image is ~2.8 GB — its
-first-run pull alone can take ~5 min; the readiness wait allows up to
+script deploys it and pulls `qwen2.5vl:3b` (~2.5 GB) **before setup finishes**, so
+CV is usable as soon as the stack is up. (The `ollama/ollama` image is ~2.8 GB —
+its first-run pull alone can take ~5 min; the readiness wait allows up to
 `OLLAMA_READY_TIMEOUT` seconds, default 900.)
-Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through), so
-inference is ~10–30 s per capture. The higher-quality `qwen2.5vl:7b` can be
-enabled via `OLLAMA_MODEL=qwen2.5vl:7b` in `.env`, but is ~2–5 min/capture on CPU.
+Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).
+**Qwen2.5-VL 3B** is the default — small enough for CPU, but strong at reading
+product labels and returning valid structured JSON (the previous `moondream`
+default was faster but frequently malformed the JSON). `OLLAMA_KEEP_ALIVE=-1`
+keeps the model resident so captures don't pay a cold-load cost. Override the
+model with `OLLAMA_MODEL` in `.env` if needed (larger models are much slower on CPU).
 
 If models need to be re-pulled after a `make reset`:
 
@@ -124,7 +127,7 @@ it stopped. What it does, in order:
 | Ingress              | Creates `*.localtest.me` ingress rules                                                                           | instant        |
 | Rollout waits        | Waits for all three app Deployments to go Ready                                                                  | ~60 s          |
 | Sample-shelf seed    | Uploads `sample-shelves/` into SeaweedFS so the local Sample picker matches deployed (`scripts/seed-samples.sh`) | instant        |
-| Model pull           | Pulls `moondream` into the Ollama pod — **blocking**, so setup waits for CV to be ready                          | ~1–5 min       |
+| Model pull           | Pulls `qwen2.5vl:3b` into the Ollama pod — **blocking**, so setup waits for CV to be ready                       | ~1–5 min       |
 
 Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 
@@ -224,7 +227,7 @@ AWS_ACCESS_KEY_ID=retaildemo AWS_SECRET_ACCESS_KEY=retaildemo-secret \
 ```
 
 > Prefer **stocked** shelves with visible products — the local CV model
-> (Ollama / Moondream) is weaker than the cloud one and returns few or zero
+> (Ollama / Qwen2.5-VL) is weaker than the cloud one and returns few or zero
 > items for empty/blank shelves.
 
 ### Dev tooling (local only)
@@ -348,12 +351,12 @@ Deployment → Modify → Version) and update the manifest to match.
 
 ### First capture is slow
 
-The first `/api/inventory/capture` request causes Moondream to load into CPU memory
-inside the Ollama pod. Expect ~30 s before the response. Subsequent captures are
-faster (~10–15 s).
+The first `/api/inventory/capture` request causes the model (Qwen2.5-VL 3B) to
+load into CPU memory inside the Ollama pod. Expect ~30 s before the response.
+`OLLAMA_KEEP_ALIVE=-1` keeps it resident, so subsequent captures are faster.
 
 Setup pulls the model before finishing, so it should already be present. If a
-capture still returns **503** (`model 'moondream' not found`), check and re-pull:
+capture still returns **503** (`model 'qwen2.5vl:3b' not found`), check and re-pull:
 
 ```bash
 kubectl -n retail exec deploy/ollama -- ollama list

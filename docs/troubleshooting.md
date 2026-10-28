@@ -157,11 +157,12 @@ Desktop's RAM allocation (Settings → Resources → Memory).
 ### CV returns unexpected items / hallucinations, or capture is slow
 
 Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).
-`moondream` (~10–30 s/capture) is the default. `qwen2.5vl:7b` is available as the
-fallback but is significantly slower on CPU (~2–5 min/capture). Switch primary model
-by setting `OLLAMA_MODEL=qwen2.5vl:7b` in `infra/local/backend.yaml`, then:
+`qwen2.5vl:3b` is the default — small enough for CPU, but strong at reading
+labels and returning valid structured JSON. To switch models, set `OLLAMA_MODEL`
+in `infra/local/backend.yaml`, pull it, then restart the backend:
 
 ```bash
+kubectl -n retail exec deploy/ollama -- ollama pull <model>
 kubectl -n retail rollout restart deploy/retail-stock-take-backend-web-app
 ```
 

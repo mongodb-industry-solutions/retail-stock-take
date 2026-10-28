@@ -47,7 +47,7 @@ backend (FastAPI)  ── /api/auth/{token,keys}, /api/inventory/capture, /api/h
    │  └─ insert metadata + asset ref ─▶ MongoDB
 PowerSync ── change streams (pre/post images) ─▶ WebSocket push ─▶ browser SQLite
 MongoDB Enterprise RS + mongot Search (MCK operator, Ops Manager managed — in-cluster)
-Ollama IN-CLUSTER (Moondream primary; Qwen2.5-VL 7B optional) — ClusterIP Service
+Ollama IN-CLUSTER (Qwen2.5-VL 3B) — ClusterIP Service
   `ollama:11434`, models on 10 Gi PVC (no host Ollama needed)
 ```
 

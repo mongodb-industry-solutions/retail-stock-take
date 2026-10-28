@@ -30,7 +30,7 @@ metadata:
   name: frontend
   namespace: retail
   annotations:
-    # CV inference (moondream cold-start) can take 60–120s on CPU.
+    # CV inference (model cold-start) can take 60–120s on CPU.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
     # Shelf photos (esp. from phones) routinely exceed nginx's 1 MB default;

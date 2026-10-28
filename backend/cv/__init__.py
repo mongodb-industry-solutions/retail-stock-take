@@ -6,9 +6,10 @@ the identical contract —
 callers (see `api/inventory.py`) stay provider-agnostic and catch a single
 `CVError`.
 
-  Local (kind):    CV_PROVIDER=ollama  -> in-cluster Ollama (moondream)
+  Local (kind):    CV_PROVIDER=ollama  -> in-cluster Ollama (qwen2.5vl:3b)
   Cloud (Kanopy):  CV_PROVIDER=grove   -> Grove GenAI gateway (OpenAI-compatible, vision)
 """
+
 from __future__ import annotations
 
 import os
@@ -25,7 +26,7 @@ elif _provider == "ollama":
     from cv.ollama_client import OllamaError as CVError
     from cv.ollama_client import analyze_shelf_image
 
-    CV_MODEL = os.environ.get("OLLAMA_MODEL", "moondream")
+    CV_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5vl:3b")
     CV_FALLBACK = os.environ.get("OLLAMA_FALLBACK_MODEL", "")
 else:
     raise ValueError(

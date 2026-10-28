@@ -321,10 +321,10 @@ step "sample-shelf gallery (local)"
 step "ollama models (in-cluster)"
 # Blocking pull so setup only finishes once CV is actually usable — otherwise
 # the first captures 503 with "model not found" until the pull completes.
-if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
-  ok "${OLLAMA_MODEL:-moondream} already present"
+if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-qwen2.5vl:3b}"; then
+  ok "${OLLAMA_MODEL:-qwen2.5vl:3b} already present"
 else
-  say "pulling ${OLLAMA_MODEL:-moondream} into the cluster (can take several minutes)…"
+  say "pulling ${OLLAMA_MODEL:-qwen2.5vl:3b} into the cluster (can take several minutes)…"
   "$ROOT/scripts/pull-models.sh" || warn "model pull failed — run: bash scripts/pull-models.sh"
 fi
 
@@ -334,10 +334,10 @@ ADMIN_PW="$(ksecret_val "$NS_DB" retail-mongodb-retail-admin-admin password || t
 OM_USER="$(ksecret_val "$NS_DB" ops-manager-admin-secret Username || echo "$OM_ADMIN_USER")"
 OM_PW="$(ksecret_val "$NS_DB" ops-manager-admin-secret Password || true)"
 MONGO_URI="mongodb://admin:${ADMIN_PW:-<password>}@localhost:${HOST_MONGO_PORT}/?authSource=admin&directConnection=true"
-if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
-  OLLAMA_SUMMARY="${C_GREEN}ready${C_RESET} — ${OLLAMA_MODEL:-moondream} present in cluster"
+if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-qwen2.5vl:3b}"; then
+  OLLAMA_SUMMARY="${C_GREEN}ready${C_RESET} — ${OLLAMA_MODEL:-qwen2.5vl:3b} present in cluster"
 else
-  OLLAMA_SUMMARY="${C_YELLOW}not ready${C_RESET} — ${OLLAMA_MODEL:-moondream} missing; run: bash scripts/pull-models.sh"
+  OLLAMA_SUMMARY="${C_YELLOW}not ready${C_RESET} — ${OLLAMA_MODEL:-qwen2.5vl:3b} missing; run: bash scripts/pull-models.sh"
 fi
 
 step "ready — local stack is up"

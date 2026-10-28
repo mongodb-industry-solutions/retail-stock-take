@@ -48,7 +48,7 @@ stream → PowerSync → browser re-renders.
 - FastAPI + Python 3.13 + `uv`
 - Next.js 16 (App Router, JS) + LeafyGreen + Tailwind 4
 - `@powersync/web` + `@journeyapps/wa-sqlite` (OPFS)
-- Ollama (in-cluster; Moondream primary, Qwen2.5-VL 7B optional)
+- Ollama (in-cluster; Qwen2.5-VL 3B)
 - kind (local Kubernetes)
 
 ## Quick start

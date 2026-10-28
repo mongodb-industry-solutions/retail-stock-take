@@ -9,7 +9,7 @@ import Icon from '@leafygreen-ui/icon';
 
 const STAGES = [
   { glyph: 'Camera', label: 'Browser capture', sub: 'POST /api/inventory/capture' },
-  { glyph: 'Beaker', label: 'FastAPI + CV model', sub: 'Moondream → JSON' },
+  { glyph: 'Beaker', label: 'FastAPI + CV model', sub: 'Qwen2.5-VL → JSON' },
   { glyph: 'Database', label: 'MongoDB', sub: 'retail_demo.inventory_captures' },
   { glyph: 'Refresh', label: 'PowerSync', sub: 'global_inventory · WebSocket' },
   { glyph: 'Cloud', label: 'All clients', sub: 'SQLite · live query' },

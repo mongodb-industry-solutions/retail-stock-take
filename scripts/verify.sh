@@ -51,7 +51,7 @@ check "ollama pod ready"   bash -c "kubectl -n $NS_APP get deploy ollama -o json
 check "ollama API reachable" bash -c "kubectl -n $NS_APP exec deploy/ollama -- ollama list >/dev/null 2>&1"
 # The model must be present for CV to work — treat a missing model as a hard
 # failure (after a bounded wait), so verify can't pass with CV broken.
-_ollama_model="${OLLAMA_MODEL:-moondream}"
+_ollama_model="${OLLAMA_MODEL:-qwen2.5vl:3b}"
 _cv_timeout="${VERIFY_CV_TIMEOUT:-300}"
 _ollama_has_model() { kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "$_ollama_model"; }
 if _ollama_has_model; then

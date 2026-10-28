@@ -123,7 +123,7 @@ end-to-end sync is proven** — the CV pipeline is polish on top.
 
 In the web UI click **Choose photo** → pick any shelf image → **Capture**.
 
-Within 10–60 s (Ollama time) a new row appears with `cv_model: "qwen2.5vl:7b"` and
+Within 10–60 s (Ollama time) a new row appears with `cv_model: "qwen2.5vl:3b"` and
 a plausible `items` array. Verify:
 
 ```bash
