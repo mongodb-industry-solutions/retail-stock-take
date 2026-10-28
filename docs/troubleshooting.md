@@ -146,6 +146,11 @@ If models are missing (e.g. after a `make reset`), re-pull:
 bash scripts/pull-models.sh
 ```
 
+`make verify` treats a missing model (and a 503 capture) as a **hard failure**, so
+it won't report success while CV is down. The `ollama/ollama` image is ~2.8 GB —
+a first-run image pull can take ~5 min (the readiness wait allows up to
+`OLLAMA_READY_TIMEOUT`, default 900s).
+
 If the pod is in `CrashLoopBackOff`, it likely needs more memory — increase Docker
 Desktop's RAM allocation (Settings → Resources → Memory).
 

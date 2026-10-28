@@ -47,12 +47,27 @@ check "SeaweedFS filer UI (s3.localtest.me)"      http_up "http://s3.localtest.m
 check "backend Swagger UI (backend.localtest.me)" http_up "http://backend.localtest.me/docs"
 
 step "ollama (CV provider, in-cluster)"
-check "ollama pod ready" bash -c "kubectl -n $NS_APP get deploy ollama -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q '^1'"
+check "ollama pod ready"   bash -c "kubectl -n $NS_APP get deploy ollama -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q '^1'"
+check "ollama API reachable" bash -c "kubectl -n $NS_APP exec deploy/ollama -- ollama list >/dev/null 2>&1"
+# The model must be present for CV to work — treat a missing model as a hard
+# failure (after a bounded wait), so verify can't pass with CV broken.
 _ollama_model="${OLLAMA_MODEL:-moondream}"
-if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "$_ollama_model"; then
-  pass "$_ollama_model pulled"
+_cv_timeout="${VERIFY_CV_TIMEOUT:-300}"
+_ollama_has_model() { kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "$_ollama_model"; }
+if _ollama_has_model; then
+  pass "$_ollama_model present"
 else
-  warn "$_ollama_model not yet pulled — CV will 503 until pull completes (tail /tmp/retail-ollama-pull.log)"
+  warn "$_ollama_model not present yet — waiting up to ${_cv_timeout}s for the pull"
+  _cv_deadline=$(( SECONDS + _cv_timeout ))
+  while ! _ollama_has_model; do
+    [ "$SECONDS" -ge "$_cv_deadline" ] && break
+    sleep 5
+  done
+  if _ollama_has_model; then
+    pass "$_ollama_model present"
+  else
+    fail "$_ollama_model missing after ${_cv_timeout}s — run: bash scripts/pull-models.sh"
+  fi
 fi
 
 step "host access (NodePort → kind port-mappings)"
@@ -128,7 +143,7 @@ if [ -n "$SAMPLE" ]; then
     ST=$(grep -o '"status":"[^"]*"' /tmp/retail_capture.json | head -1 | sed 's/.*://;s/"//g')
     if [ "$ST" = "ACTIVE" ]; then pass "capture → 201, status ACTIVE"; else fail "capture status='$ST' (expected ACTIVE)"; fi
   elif [ "$RESP" = "503" ]; then
-    warn "capture returned 503 (Ollama/CV unavailable) — run: bash scripts/pull-models.sh"
+    fail "capture returned 503 (CV unavailable) — is $_ollama_model pulled and serving?"
   else
     fail "capture returned HTTP $RESP"
   fi

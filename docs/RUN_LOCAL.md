@@ -60,7 +60,10 @@ Cloudflare WARP, Slack, and browser UDP connections to remote port 443 are
 ### Ollama (CV)
 
 Ollama runs **inside the kind cluster** — no host installation needed. The setup
-script deploys it and pulls `moondream` (~1.5 GB) in the background automatically.
+script deploys it and pulls `moondream` (~1.5 GB) **before setup finishes**, so CV
+is usable as soon as the stack is up. (The `ollama/ollama` image is ~2.8 GB — its
+first-run pull alone can take ~5 min; the readiness wait allows up to
+`OLLAMA_READY_TIMEOUT` seconds, default 900.)
 Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through), so
 inference is ~10–30 s per capture. The higher-quality `qwen2.5vl:7b` can be
 enabled via `OLLAMA_MODEL=qwen2.5vl:7b` in `.env`, but is ~2–5 min/capture on CPU.
@@ -121,7 +124,7 @@ it stopped. What it does, in order:
 | Ingress              | Creates `*.localtest.me` ingress rules                                                                           | instant        |
 | Rollout waits        | Waits for all three app Deployments to go Ready                                                                  | ~60 s          |
 | Sample-shelf seed    | Uploads `sample-shelves/` into SeaweedFS so the local Sample picker matches deployed (`scripts/seed-samples.sh`) | instant        |
-| Model pull (bg)      | Pulls moondream + qwen2.5vl:7b in background inside the Ollama pod (logs → `/tmp/retail-ollama-pull.log`)        | ~5–10 min      |
+| Model pull           | Pulls `moondream` into the Ollama pod — **blocking**, so setup waits for CV to be ready                          | ~1–5 min       |
 
 Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 
@@ -134,9 +137,11 @@ Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 Checks: ingress reachability, backend health, PowerSync liveness/readiness, the
 host-access ports (27017/8080/8333), MongoDB CR status, `changeStreamPreAndPostImages`,
 JWKS/token endpoints, SeaweedFS round-trip, the sample-shelf gallery
-(`/api/sample-shelves`), a real photo capture (using an image from
-`sample-shelves/`), and the retention reconciler. Vector search is reported as
-a non-fatal WARN (deferred — needs MongoDB 8.2+).
+(`/api/sample-shelves`), **Ollama/CV readiness** (pod + API + the model present —
+a missing model is a hard failure after a bounded wait), a real photo capture
+(using an image from `sample-shelves/` — a 503 is a hard failure), and the
+retention reconciler. Vector search is reported as a non-fatal WARN (deferred —
+needs MongoDB 8.2+).
 
 `setup.sh` itself ends by printing ready-to-use access details for all five
 endpoints (app, MongoDB/Compass, Ops Manager, S3, dev tooling) with live credentials.
@@ -347,13 +352,12 @@ The first `/api/inventory/capture` request causes Moondream to load into CPU mem
 inside the Ollama pod. Expect ~30 s before the response. Subsequent captures are
 faster (~10–15 s).
 
-If the model hasn't finished pulling yet (setup pulls in the background), capture
-returns **503**. Check pull progress:
+Setup pulls the model before finishing, so it should already be present. If a
+capture still returns **503** (`model 'moondream' not found`), check and re-pull:
 
 ```bash
-tail -f /tmp/retail-ollama-pull.log
-# or watch from inside the pod:
 kubectl -n retail exec deploy/ollama -- ollama list
+bash scripts/pull-models.sh
 ```
 
 ### localtest.me DNS

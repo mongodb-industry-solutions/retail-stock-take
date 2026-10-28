@@ -8,6 +8,7 @@ str)` — so callers stay provider-agnostic (see `cv/__init__.py`).
 The base URL, model, and API key are all provisioned per Grove request, so they
 are env-configurable. Local runs use Ollama instead; Grove is the cloud path.
 """
+
 from __future__ import annotations
 
 import base64
@@ -18,6 +19,7 @@ import os
 import httpx
 from pydantic import ValidationError
 
+from cv.json_utils import loads_tolerant
 from cv.prompt import SYSTEM_PROMPT, USER_PROMPT
 from cv.validator import CVResponse
 
@@ -30,6 +32,9 @@ _base = os.environ.get(
 _api_key = os.environ.get("GROVE_API_KEY", "")
 _timeout = float(os.environ.get("GROVE_REQUEST_TIMEOUT_SECONDS", "120"))
 _max_tokens = int(os.environ.get("GROVE_MAX_COMPLETION_TOKENS", "1024"))
+# Bounded same-model retries (mirrors the Ollama client): one malformed
+# generation shouldn't fail the capture.
+_max_attempts = int(os.environ.get("CV_MAX_ATTEMPTS", "2"))
 
 
 class GroveError(RuntimeError):
@@ -75,7 +80,9 @@ async def _call(model: str, data_url: str) -> dict:
     headers = {"api-key": _api_key, "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=_timeout) as client:
         try:
-            r = await client.post(f"{_base}/chat/completions", json=payload, headers=headers)
+            r = await client.post(
+                f"{_base}/chat/completions", json=payload, headers=headers
+            )
         except httpx.HTTPError as e:
             raise GroveError(f"transport failure: {e}") from e
 
@@ -90,38 +97,55 @@ async def _call(model: str, data_url: str) -> dict:
     try:
         content = body["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:
-        raise GroveError(f"unexpected grove response shape: {e}; body={str(body)[:200]!r}") from e
+        raise GroveError(
+            f"unexpected grove response shape: {e}; body={str(body)[:200]!r}"
+        ) from e
     if not content:
         raise GroveError("grove returned empty content")
 
     try:
-        return json.loads(content)
+        return loads_tolerant(content)
     except json.JSONDecodeError as e:
-        raise GroveError(f"model output not valid JSON: {e}; content={content[:200]!r}") from e
+        raise GroveError(
+            f"model output not valid JSON: {e}; content={content[:200]!r}"
+        ) from e
 
 
 async def analyze_shelf_image(
     image_bytes: bytes, model: str, fallback_model: str
 ) -> tuple[CVResponse, str]:
     """
-    Call Grove with the primary model; on JSON/validation failure, retry with
-    the fallback. Returns the validated response and the model name that
-    succeeded.
+    Call Grove with the primary model, retrying it a bounded number of times on
+    JSON/validation failure; then retry once with the fallback (if configured).
+    Returns the validated response and the model name that succeeded.
     """
     data_url = _data_url(image_bytes)
 
+    plan: list[tuple[str, int]] = [(model, _max_attempts)]
+    if fallback_model:
+        plan.append((fallback_model, 1))
+
     last_err: Exception | None = None
-    for attempt_model in (model, fallback_model):
+    for attempt_model, attempts in plan:
         if not attempt_model:
             continue
-        try:
-            raw = await _call(attempt_model, data_url)
-            validated = CVResponse.model_validate(raw)
-            log.info("grove %s succeeded: %d items", attempt_model, len(validated.items))
-            return validated, attempt_model
-        except (GroveError, ValidationError) as e:
-            log.warning("grove %s failed: %s", attempt_model, e)
-            last_err = e
-            continue
+        for attempt in range(1, attempts + 1):
+            try:
+                raw = await _call(attempt_model, data_url)
+                validated = CVResponse.model_validate(raw)
+                log.info(
+                    "grove %s succeeded: %d items", attempt_model, len(validated.items)
+                )
+                return validated, attempt_model
+            except (GroveError, ValidationError) as e:
+                log.warning(
+                    "grove %s attempt %d/%d failed: %s",
+                    attempt_model,
+                    attempt,
+                    attempts,
+                    e,
+                )
+                last_err = e
+                continue
 
-    raise GroveError(f"all models failed; last error: {last_err}")
+    raise GroveError(f"all attempts failed; last error: {last_err}")

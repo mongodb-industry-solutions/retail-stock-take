@@ -266,7 +266,20 @@ step "ollama (in-cluster)"
 kubectl -n "$NS_APP" delete svc ollama --ignore-not-found=true >/dev/null
 kubectl apply -f infra/k8s/ollama/ollama.yaml
 ollama_ready() { kubectl -n "$NS_APP" get deploy ollama -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "^1"; }
-spin_wait "ollama" 300 5 -- ollama_ready || warn "ollama pod not ready — check kubectl -n $NS_APP logs deploy/ollama"
+# Live status for the spinner: surface the real state (image pull / scheduling /
+# container creating) so a slow first-run pull is visible instead of a bare wait.
+ollama_status() {
+  local pod phase reason
+  pod="$(kubectl -n "$NS_APP" get pods -l app=ollama -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+  [ -z "$pod" ] && { echo "scheduling"; return 0; }
+  phase="$(kubectl -n "$NS_APP" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null)"
+  reason="$(kubectl -n "$NS_APP" get pod "$pod" -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)"
+  echo "${reason:-${phase:-starting}}"
+}
+# The ollama/ollama image is ~2.8 GB; a first-run pull alone can exceed 5 min,
+# so allow a generous window (override with OLLAMA_READY_TIMEOUT).
+spin_wait "ollama" "${OLLAMA_READY_TIMEOUT:-900}" 5 --status ollama_status -- ollama_ready \
+  || warn "ollama pod not ready — check kubectl -n $NS_APP logs deploy/ollama"
 
 # ===========================================================================
 step "build images + load into kind"
@@ -306,11 +319,13 @@ step "sample-shelf gallery (local)"
 
 # ===========================================================================
 step "ollama models (in-cluster)"
+# Blocking pull so setup only finishes once CV is actually usable — otherwise
+# the first captures 503 with "model not found" until the pull completes.
 if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
   ok "${OLLAMA_MODEL:-moondream} already present"
 else
-  ( "$ROOT/scripts/pull-models.sh" ) >/tmp/retail-ollama-pull.log 2>&1 &
-  say "model pull running in the background → /tmp/retail-ollama-pull.log"
+  say "pulling ${OLLAMA_MODEL:-moondream} into the cluster (can take several minutes)…"
+  "$ROOT/scripts/pull-models.sh" || warn "model pull failed — run: bash scripts/pull-models.sh"
 fi
 
 # ===========================================================================
@@ -322,7 +337,7 @@ MONGO_URI="mongodb://admin:${ADMIN_PW:-<password>}@localhost:${HOST_MONGO_PORT}/
 if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
   OLLAMA_SUMMARY="${C_GREEN}ready${C_RESET} — ${OLLAMA_MODEL:-moondream} present in cluster"
 else
-  OLLAMA_SUMMARY="${C_YELLOW}downloading${C_RESET} — ${OLLAMA_MODEL:-moondream} still pulling (tail /tmp/retail-ollama-pull.log)"
+  OLLAMA_SUMMARY="${C_YELLOW}not ready${C_RESET} — ${OLLAMA_MODEL:-moondream} missing; run: bash scripts/pull-models.sh"
 fi
 
 step "ready — local stack is up"
@@ -359,6 +374,6 @@ cat <<EOF
 
   ${C_GREY}Ollama / CV:${C_RESET}  ${OLLAMA_SUMMARY}
 
-  ${C_GREY}Smoke test:${C_RESET} ./scripts/verify.sh      ${C_GREY}Status:${C_RESET} make status      ${C_GREY}Tear down:${C_RESET} ./scripts/reset.sh
+  ${C_GREY}Smoke test:${C_RESET} make verify      ${C_GREY}Status:${C_RESET} make status      ${C_GREY}Tear down:${C_RESET} make reset
 
 EOF
