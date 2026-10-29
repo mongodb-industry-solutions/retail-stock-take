@@ -49,6 +49,17 @@ die()  { err "$*"; exit 1; }
 hl()   { printf '%s%s%s' "$C_BOLD$C_CYAN" "$*" "$C_RESET"; }
 
 # ---------------------------------------------------------------------------
+# Local kind kubeconfig
+# ---------------------------------------------------------------------------
+# The local stack keeps its own kubeconfig so an ambient KUBECONFIG (e.g. a
+# corporate cluster) can never redirect kubectl at the wrong cluster. Callers
+# `export KUBECONFIG="$(kind_kubeconfig)"` before touching the cluster.
+# Override the path with KIND_KUBECONFIG.
+kind_kubeconfig() {
+  printf '%s' "${KIND_KUBECONFIG:-$HOME/.kube/${KIND_CLUSTER:-retail-stock-take}-config}"
+}
+
+# ---------------------------------------------------------------------------
 # spin_wait — poll a condition with an animated spinner
 # ---------------------------------------------------------------------------
 # Usage:

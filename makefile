@@ -5,6 +5,9 @@
 # exported by other tooling and would silently override the local target.
 KIND_CLUSTER ?= retail-stock-take
 LOCAL_NS ?= retail
+# Dedicated kubeconfig for the local stack — keeps an ambient KUBECONFIG (e.g. a
+# corporate cluster) from redirecting kubectl. Must match scripts/lib.sh.
+KIND_KUBECONFIG ?= $(HOME)/.kube/$(KIND_CLUSTER)-config
 
 setup:
 	./scripts/setup.sh
@@ -16,11 +19,11 @@ reset:
 	./scripts/reset.sh
 
 status:
-	kubectl -n $(LOCAL_NS) get pods,svc,ingress
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl -n $(LOCAL_NS) get pods,svc,ingress
 
 # Tail logs for all app pods (label set by the web-app chart values, W6).
 logs:
-	kubectl -n $(LOCAL_NS) logs -l app.kubernetes.io/part-of=$(KIND_CLUSTER) --all-containers --tail=200 -f
+	KUBECONFIG=$(KIND_KUBECONFIG) kubectl -n $(LOCAL_NS) logs -l app.kubernetes.io/part-of=$(KIND_CLUSTER) --all-containers --tail=200 -f
 
 install_uv:
 	curl -LsSf https://astral.sh/uv/install.sh | sh

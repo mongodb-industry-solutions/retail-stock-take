@@ -17,6 +17,9 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
+# Use the local stack's dedicated kubeconfig (isolated from any ambient KUBECONFIG).
+export KUBECONFIG="$(kind_kubeconfig)"
+
 # Must match infra/local/backend.yaml (STORAGE_* + STORAGE_SAMPLES_PREFIX).
 # Overridable via the environment / .env for non-default setups.
 SRC_DIR="${SAMPLE_SHELVES_DIR:-$ROOT/sample-shelves}"

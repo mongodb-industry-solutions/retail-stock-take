@@ -8,11 +8,13 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
+# Match setup.sh: operate on the local stack's dedicated kubeconfig.
+export KUBECONFIG="$(kind_kubeconfig)"
 CLUSTER="${KIND_CLUSTER:-retail-stock-take}"
 
 step "deleting kind cluster '$CLUSTER'"
 say "removes all in-cluster state + volumes (Ops Manager is in-cluster, so it goes too)"
-kind delete cluster --name "$CLUSTER" 2>/dev/null || true
+kind delete cluster --name "$CLUSTER" --kubeconfig "$KUBECONFIG" 2>/dev/null || true
 ok "cluster deleted"
 
 step "reset complete"

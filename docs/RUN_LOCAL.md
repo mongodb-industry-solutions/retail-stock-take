@@ -19,6 +19,17 @@ air-gapped after images are pulled.
 | `helm`                          | `brew install helm`                               |
 | `openssl`                       | ships with macOS; `brew install openssl` on Linux |
 
+### Kubeconfig
+
+The local stack uses its **own** kubeconfig so an ambient `KUBECONFIG` (e.g. a
+corporate cluster) can never redirect `kubectl` at the wrong cluster:
+
+- Default path: `~/.kube/retail-stock-take-config` (override with `KIND_KUBECONFIG`).
+- `setup.sh` creates the cluster with `--kubeconfig "$KIND_KUBECONFIG"` and exports
+  `KUBECONFIG` for every `kubectl` call; `verify.sh` / `reset.sh` / `seed-samples.sh`
+  / `pull-models.sh` and the `make status` / `make logs` targets use the same file.
+- To poke at the cluster yourself: `KUBECONFIG=~/.kube/retail-stock-take-config kubectl -n retail get pods`.
+
 ### Hardware
 
 - **24 GB RAM strongly recommended.** Ops Manager alone needs ~4 GB. The full

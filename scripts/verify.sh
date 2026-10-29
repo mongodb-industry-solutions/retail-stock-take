@@ -8,6 +8,9 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
+# Use the local stack's dedicated kubeconfig (isolated from any ambient KUBECONFIG).
+export KUBECONFIG="$(kind_kubeconfig)"
+
 NS_DB="mongodb"
 NS_APP="retail"
 FRONT="http://frontend.localtest.me"

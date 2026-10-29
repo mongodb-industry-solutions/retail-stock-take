@@ -20,6 +20,9 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
+# Isolate the local stack from any ambient KUBECONFIG (e.g. a corporate cluster).
+export KUBECONFIG="$(kind_kubeconfig)"
+
 # ---- configuration (override via the environment) -------------------------
 CLUSTER="${KIND_CLUSTER:-retail-stock-take}"
 NS_DB="mongodb"                                   # operator + MongoDB + Ops Manager
@@ -60,7 +63,7 @@ if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
 else
   # The cluster config publishes host ports 80/443 (ingress) + 27017/8080/8333
   # (MongoDB / Ops Manager / S3). These mappings only take effect at creation.
-  kind create cluster --name "$CLUSTER" --config infra/k8s/kind-cluster.yaml
+  kind create cluster --name "$CLUSTER" --config infra/k8s/kind-cluster.yaml --kubeconfig "$KUBECONFIG"
   ok "cluster created"
 fi
 kubectl config use-context "kind-$CLUSTER" >/dev/null
