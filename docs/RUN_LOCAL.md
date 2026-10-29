@@ -81,19 +81,7 @@ bash scripts/pull-models.sh
 
 ## First-time setup
 
-### 1. (Optional) Create a `.env` file for overrides
-
-No credentials are required. The `.env` file is only needed if you want to
-override defaults (cluster name, operator version, Ollama model, etc.):
-
-```bash
-cp .env.example .env
-# Edit .env and uncomment/change the values you want to override.
-```
-
-`setup.sh` loads `.env` automatically if present. The file is gitignored.
-
-### 2. Run setup
+### 1. Run setup
 
 ```bash
 ./scripts/setup.sh
@@ -131,7 +119,7 @@ it stopped. What it does, in order:
 
 Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 
-### 3. Smoke test
+### 2. Smoke test
 
 ```bash
 ./scripts/verify.sh
@@ -149,7 +137,7 @@ needs MongoDB 8.2+).
 `setup.sh` itself ends by printing ready-to-use access details for all five
 endpoints (app, MongoDB/Compass, Ops Manager, S3, dev tooling) with live credentials.
 
-### 4. Open the app
+### 3. Open the app
 
 ```
 http://localhost
@@ -176,7 +164,7 @@ the frontend's `/api/*` proxy and over in-cluster DNS (PowerSync → JWKS). That
 Route Handler (`frontend/app/api/[...path]/route.js`) that reads `BACKEND_URL` at
 request time, so the same image works in every environment with no `NEXT_PUBLIC_*`.
 
-### 5. Connect to MongoDB, Ops Manager, and S3
+### 4. Connect to MongoDB, Ops Manager, and S3
 
 These are exposed on host ports automatically — **no `kubectl port-forward`
 needed**. `setup.sh` prints the exact strings (with live credentials) when it

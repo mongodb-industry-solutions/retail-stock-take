@@ -20,14 +20,7 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
-# Load .env if present (optional overrides — no credentials required).
-# Create one from .env.example: cp .env.example .env
-if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  set -a; . ./.env; set +a
-fi
-
-# ---- configuration (override via .env or the environment) -----------------
+# ---- configuration (override via the environment) -------------------------
 CLUSTER="${KIND_CLUSTER:-retail-stock-take}"
 NS_DB="mongodb"                                   # operator + MongoDB + Ops Manager
 NS_APP="retail"                                   # backend/frontend/powersync + SeaweedFS

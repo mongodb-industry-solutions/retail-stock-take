@@ -39,19 +39,5 @@ main.py      app wiring + startup hooks
 
 ## Config
 
-Env-driven; the contract is documented in the root `.env.example`. Local cluster
-values live in `infra/local/backend.yaml`, cloud values in `environment/*.yaml`.
-
-## Local dev
-
-Normally the backend runs **inside the kind cluster** via `./scripts/setup.sh`
-(builds `backend/Dockerfile`). To iterate on it directly:
-
-```bash
-make uv_sync                 # install deps into backend/.venv
-cd backend
-uv run uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-It needs `MONGODB_URI`, the JWT key paths, and `STORAGE_*` / `OLLAMA_*` env set —
-see `infra/local/backend.yaml` for the full list.
+Env-driven; local cluster values live in `infra/local/backend.yaml`, cloud values
+in `environment/*-backend.yaml`.

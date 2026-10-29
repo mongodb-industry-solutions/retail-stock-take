@@ -141,9 +141,9 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   When you change a synced column, update three places in lockstep: this schema,
   `powersync/sync-rules.yaml`, and the writer in `backend/api/inventory.py`.
 - Storage access goes through `backend/storage/get_storage_adapter()` only.
-- Config: env-driven. `.env.example` documents the contract; local cluster values
-  live in `infra/local/*.yaml`, cloud (Kanopy) values in `environment/*.yaml`
-  (a shared base + per-service file). PowerSync needs `PS_*` vars for `!env`.
+- Config: env-driven. Local cluster values live in `infra/local/*.yaml`, cloud
+  (Kanopy) values in `environment/*.yaml` (a shared base + per-service file).
+  PowerSync needs `PS_*` vars for `!env`.
 - Backend split: routes in `backend/api/`, CV in `backend/cv/`, storage in
   `backend/storage/`, retention in `backend/retention/`, DB connector in
   `backend/db/mdb.py`.
@@ -154,7 +154,6 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   rule).
 - COOP/COEP headers in `frontend/next.config.mjs` — needed for OPFS persistence
   of wa-sqlite. Don't remove. Frontend builds `output: 'standalone'`.
-- `.env.example` lives at root (note: the harness blocks direct `.env*` writes — use `mv` or have the user rename it).
 - Kanopy/Drone is live: `.drone.yml` (separate pods, 3 releases) + `environment/`.
   Cloud needs manual prereqs: Atlas + the k8s secrets/configmap + the Drone CI
   secrets (see `.drone.yml` header and `docs/KANOPY_DEPLOYMENT_README.md`).
