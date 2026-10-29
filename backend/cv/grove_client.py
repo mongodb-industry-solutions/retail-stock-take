@@ -1,17 +1,7 @@
-"""Grove CV provider — MongoDB's internal GenAI gateway.
-
-Grove exposes an OpenAI-compatible, vision-capable chat/completions endpoint.
-This client targets Grove's **new AI Gateway** (`ai-gateway.corp.mongodb.com`),
-which replaced the legacy Azure-based gateway (sunset 2026-12-01). Auth uses a
-standard `Authorization: Bearer <gateway key>` header (the legacy custom
-`api-key` header is no longer used).
-
-This client mirrors the Ollama client's contract —
+"""Grove CV provider (cloud). Mirrors the Ollama client's contract —
 `analyze_shelf_image(image_bytes, model, fallback) -> (CVResponse, str)` — so
-callers stay provider-agnostic (see `cv/__init__.py`).
-
-The base URL, model, and API key are all provisioned per Grove request, so they
-are env-configurable. Local runs use Ollama instead; Grove is the cloud path.
+callers stay provider-agnostic (see `cv/__init__.py`). Base URL, model, and key
+are env-configurable.
 """
 
 from __future__ import annotations
@@ -77,13 +67,11 @@ async def _call(model: str, data_url: str) -> dict:
             },
         ],
         # The prompt fully specifies the {"items": [...]} shape. json_object is
-        # portable across Grove's OpenAI-format models, unlike strict
-        # json_schema which only the newest GPT builds honour.
+        # portable across the gateway's models, unlike strict json_schema which
+        # only the newest GPT builds honour.
         "response_format": {"type": "json_object"},
         "max_completion_tokens": _max_tokens,
     }
-    # New AI Gateway uses standard OpenAI SDK auth (Bearer), not the legacy
-    # Azure gateway's custom `api-key` header.
     headers = {
         "Authorization": f"Bearer {_api_key}",
         "Content-Type": "application/json",

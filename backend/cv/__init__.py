@@ -6,8 +6,8 @@ the identical contract —
 callers (see `api/inventory.py`) stay provider-agnostic and catch a single
 `CVError`.
 
-  Local (kind):    CV_PROVIDER=ollama  -> in-cluster Ollama (qwen2.5vl:3b)
-  Cloud (Kanopy):  CV_PROVIDER=grove   -> Grove GenAI gateway (OpenAI-compatible, vision)
+  Local:  CV_PROVIDER=ollama  -> in-cluster Ollama
+  Cloud:  CV_PROVIDER=grove   -> Grove gateway
 """
 
 from __future__ import annotations
