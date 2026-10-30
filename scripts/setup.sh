@@ -311,8 +311,6 @@ for svc in backend frontend powersync; do
     warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
   fi
 done
-  [ "$rc" = 0 ] || warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
-done
 
 # ===========================================================================
 step "sample-shelf gallery (local)"
