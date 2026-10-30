@@ -8,7 +8,6 @@ import { Badge } from '@leafygreen-ui/badge';
 import Button from '@leafygreen-ui/button';
 import Icon from '@leafygreen-ui/icon';
 import Modal from '@leafygreen-ui/modal';
-import { Tabs, Tab } from '@leafygreen-ui/tabs';
 import { useInventory } from '@/components/inventory/useInventory';
 import { CaptureForm } from '@/components/capture/CaptureForm';
 import { InventoryList } from '@/components/inventory/InventoryList';
@@ -23,7 +22,6 @@ export default function Home() {
   const { isDark, toggle } = useTheme();
   const [selectedId, setSelectedId] = useState(null);
   const [pipelineOpen, setPipelineOpen] = useState(false);
-  const [rightTab, setRightTab] = useState('Document');
 
   useEffect(() => {
     if (!rows?.length) {
@@ -146,26 +144,19 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Document / Image views */}
+          {/* Image (top) + document (bottom) */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div
-              className="flex-none px-5 pt-3 border-b"
-              style={{ borderColor: 'var(--mdb-border)' }}
+              className="flex-none overflow-auto px-5 py-4 border-b"
+              style={{ borderColor: 'var(--mdb-border)', height: '40vh' }}
             >
-              <Tabs aria-label="capture view" selected={rightTab} setSelected={setRightTab}>
-                <Tab name="Document">Document</Tab>
-                <Tab name="Image">Image</Tab>
-              </Tabs>
+              <CaptureImageView doc={selectedDoc} />
             </div>
-            <div className="flex-1 overflow-auto px-5 py-5">
-              {rightTab === 'Image' ? (
-                <CaptureImageView doc={selectedDoc} />
-              ) : (
-                <MongoDocViewer
-                  doc={selectedDoc}
-                  collectionName="retail_demo.inventory_captures"
-                />
-              )}
+            <div className="flex-1 overflow-auto px-5 py-4">
+              <MongoDocViewer
+                doc={selectedDoc}
+                collectionName="retail_demo.inventory_captures"
+              />
             </div>
           </div>
         </div>
@@ -186,7 +177,7 @@ function CaptureImageView({ doc }) {
   if (!doc?.id) {
     return (
       <div
-        className="flex flex-col items-center justify-center py-10 gap-2"
+        className="flex flex-col items-center justify-center h-full gap-2"
         style={{ color: 'var(--mdb-muted)' }}
       >
         <Icon glyph="Camera" size={32} fill="var(--mdb-muted)" />
@@ -195,14 +186,13 @@ function CaptureImageView({ doc }) {
     );
   }
   return (
-    <div>
+    <div className="flex items-center justify-center h-full">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/api/inventory/${doc.id}/image`}
         alt={doc.id}
-        className="w-full object-contain rounded"
+        className="max-w-full max-h-full object-contain rounded"
         style={{
-          maxHeight: '72vh',
           backgroundColor: 'var(--mdb-surface)',
           display: 'block',
           border: '1px solid var(--mdb-border)',

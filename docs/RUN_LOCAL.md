@@ -11,13 +11,24 @@ air-gapped after images are pulled.
 
 ### Tools
 
-| Tool | How to install |
-|---|---|
-| Docker Desktop ≥ 24 (or Engine) | https://docs.docker.com/get-docker/ |
-| `kind` | `brew install kind` or https://kind.sigs.k8s.io |
-| `kubectl` | `brew install kubectl` |
-| `helm` | `brew install helm` |
-| `openssl` | ships with macOS; `brew install openssl` on Linux |
+| Tool                            | How to install                                    |
+| ------------------------------- | ------------------------------------------------- |
+| Docker Desktop ≥ 24 (or Engine) | https://docs.docker.com/get-docker/               |
+| `kind`                          | `brew install kind` or https://kind.sigs.k8s.io   |
+| `kubectl`                       | `brew install kubectl`                            |
+| `helm`                          | `brew install helm`                               |
+| `openssl`                       | ships with macOS; `brew install openssl` on Linux |
+
+### Kubeconfig
+
+The local stack uses its **own** kubeconfig so an ambient `KUBECONFIG` (e.g. a
+corporate cluster) can never redirect `kubectl` at the wrong cluster:
+
+- Default path: `~/.kube/retail-stock-take-config` (override with `KIND_KUBECONFIG`).
+- `setup.sh` creates the cluster with `--kubeconfig "$KIND_KUBECONFIG"` and exports
+  `KUBECONFIG` for every `kubectl` call; `verify.sh` / `reset.sh` / `seed-samples.sh`
+  / `pull-models.sh` and the `make status` / `make logs` targets use the same file.
+- To poke at the cluster yourself: `KUBECONFIG=~/.kube/retail-stock-take-config kubectl -n retail get pods`.
 
 ### Hardware
 
@@ -27,19 +38,19 @@ air-gapped after images are pulled.
   16 GB. Ollama adds ~2 GB requests.
 - **~15 GB free disk** for Docker images and kind node layers (Ops Manager image
   is large).
-- **~2 GB extra** for the Moondream model (downloaded into the Ollama PVC on
-  first run).
+- **~2.5 GB extra** for the Qwen2.5-VL 3B model (downloaded into the Ollama PVC
+  on first run).
 
 ### Host ports the cluster publishes
 
 kind maps these host ports into the cluster (fixed at cluster-creation time):
 
-| Host port | Goes to | Used for |
-|---|---|---|
-| 80, 443 | ingress-nginx | `http://*.localtest.me` (the app) |
-| 27017 | MongoDB (NodePort) | Compass / mongosh |
-| 8080 | Ops Manager (NodePort) | Ops Manager web UI |
-| 8333 | SeaweedFS (NodePort) | S3 API (AWS CLI / Cyberduck) |
+| Host port | Goes to                | Used for                          |
+| --------- | ---------------------- | --------------------------------- |
+| 80, 443   | ingress-nginx          | `http://*.localtest.me` (the app) |
+| 27017     | MongoDB (NodePort)     | Compass / mongosh                 |
+| 8080      | Ops Manager (NodePort) | Ops Manager web UI                |
+| 8333      | SeaweedFS (NodePort)   | S3 API (AWS CLI / Cyberduck)      |
 
 **80 and 443 must be free** before `setup.sh` creates the cluster, or creation
 fails. The other three should ideally be free too (if one is taken — e.g. a local
@@ -60,10 +71,22 @@ Cloudflare WARP, Slack, and browser UDP connections to remote port 443 are
 ### Ollama (CV)
 
 Ollama runs **inside the kind cluster** — no host installation needed. The setup
-script deploys it and pulls `moondream` (~1.5 GB) in the background automatically.
-Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through), so
-inference is ~10–30 s per capture. The higher-quality `qwen2.5vl:7b` can be
-enabled via `OLLAMA_MODEL=qwen2.5vl:7b` in `.env`, but is ~2–5 min/capture on CPU.
+script deploys it and pulls `qwen2.5vl:3b` (~2.5 GB) **before setup finishes**, so
+CV is usable as soon as the stack is up. (The `ollama/ollama` image is ~2.8 GB —
+its first-run pull alone can take ~5 min; the readiness wait allows up to
+`OLLAMA_READY_TIMEOUT` seconds, default 900.)
+Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).
+**Qwen2.5-VL 3B** is the default — small enough for CPU, but strong at reading
+product labels and returning valid structured JSON (the previous `moondream`
+default was faster but frequently malformed the JSON). `OLLAMA_KEEP_ALIVE=-1`
+keeps the model resident so captures don't pay a cold-load cost. Override the
+model with `OLLAMA_MODEL` in `infra/local/backend.yaml` if needed (larger models
+are much slower on CPU).
+
+A single shelf photo tokenizes into ~4k visual tokens, so `OLLAMA_NUM_CTX` is set
+to `16384` in `infra/local/backend.yaml`. If you see a `400 ... exceeds the
+available context size` from a capture, raise it further (very large source
+images use more tokens).
 
 If models need to be re-pulled after a `make reset`:
 
@@ -75,19 +98,7 @@ bash scripts/pull-models.sh
 
 ## First-time setup
 
-### 1. (Optional) Create a `.env` file for overrides
-
-No credentials are required. The `.env` file is only needed if you want to
-override defaults (cluster name, operator version, Ollama model, etc.):
-
-```bash
-cp .env.example .env
-# Edit .env and uncomment/change the values you want to override.
-```
-
-`setup.sh` loads `.env` automatically if present. The file is gitignored.
-
-### 2. Run setup
+### 1. Run setup
 
 ```bash
 ./scripts/setup.sh
@@ -96,35 +107,36 @@ cp .env.example .env
 The script is **idempotent** — re-running after a partial failure resumes from where
 it stopped. What it does, in order:
 
-| Step | What happens | Typical wait |
-|---|---|---|
-| Preflight | Checks tools, ports, RAM | instant |
-| kind cluster | Creates one control-plane node + host port mappings (80/443/27017/8080/8333) | ~30 s |
-| ingress-nginx | Deploys the kind-flavoured ingress controller | ~60 s |
-| MCK operator | Installs the MongoDB Kubernetes operator via Helm | ~60 s |
-| OM admin secret | Generates random Ops Manager admin password | instant |
-| Ops Manager CR | Provisions Ops Manager + its application DB in-cluster | **~10–15 min** |
-| Wait for OM secret | MCK creates the `mongodb-ops-manager-admin-key` Secret once OM is Running | ~30 s |
-| OM project ConfigMap | Fetches the orgId from the OM API and writes the project ConfigMap | instant |
-| JWT keypair | Generates a fresh RS256 keypair into `.secrets/` | instant |
-| MongoDB passwords | Generates random SCRAM passwords as Secrets | instant |
-| MongoDB CR | Submits the `MongoDB` CR; Ops Manager provisions the RS | **~5–10 min** |
-| MongoDBSearch CR | Applied but **deferred** (Preview; needs MongoDB 8.2+) | instant |
-| Connection secrets | Builds SCRAM URIs from the operator-published passwords | instant |
-| Post-init Job | Enables `changeStreamPreAndPostImages` on the collection | ~30 s |
-| SeaweedFS | Deploys the S3-compatible object store (StatefulSet, NodePort) | ~60 s |
-| Host access | Applies the MongoDB + Ops Manager NodePort Services | instant |
-| PowerSync ConfigMap | Mounts `powersync.yaml` + `sync-rules.yaml` | instant |
-| Ollama Deployment | Deploys Ollama in-cluster (PVC + ClusterIP Service); waits for pod ready | ~60 s |
-| Docker builds | Builds backend + frontend images and loads them into kind | ~2–4 min |
-| Helm releases | Deploys backend, frontend, powersync via `mongodb/web-app` | ~60 s each |
-| Ingress | Creates `*.localtest.me` ingress rules | instant |
-| Rollout waits | Waits for all three app Deployments to go Ready | ~60 s |
-| Model pull (bg) | Pulls moondream + qwen2.5vl:7b in background inside the Ollama pod (logs → `/tmp/retail-ollama-pull.log`) | ~5–10 min |
+| Step                 | What happens                                                                                                     | Typical wait   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------- |
+| Preflight            | Checks tools, ports, RAM                                                                                         | instant        |
+| kind cluster         | Creates one control-plane node + host port mappings (80/443/27017/8080/8333)                                     | ~30 s          |
+| ingress-nginx        | Deploys the kind-flavoured ingress controller                                                                    | ~60 s          |
+| MCK operator         | Installs the MongoDB Kubernetes operator via Helm                                                                | ~60 s          |
+| OM admin secret      | Generates random Ops Manager admin password                                                                      | instant        |
+| Ops Manager CR       | Provisions Ops Manager + its application DB in-cluster                                                           | **~10–15 min** |
+| Wait for OM secret   | MCK creates the `mongodb-ops-manager-admin-key` Secret once OM is Running                                        | ~30 s          |
+| OM project ConfigMap | Fetches the orgId from the OM API and writes the project ConfigMap                                               | instant        |
+| JWT keypair          | Generates a fresh RS256 keypair into `.secrets/`                                                                 | instant        |
+| MongoDB passwords    | Generates random SCRAM passwords as Secrets                                                                      | instant        |
+| MongoDB CR           | Submits the `MongoDB` CR; Ops Manager provisions the RS                                                          | **~5–10 min**  |
+| MongoDBSearch CR     | Applied but **deferred** (Preview; needs MongoDB 8.2+)                                                           | instant        |
+| Connection secrets   | Builds SCRAM URIs from the operator-published passwords                                                          | instant        |
+| Post-init Job        | Enables `changeStreamPreAndPostImages` on the collection                                                         | ~30 s          |
+| SeaweedFS            | Deploys the S3-compatible object store (StatefulSet, NodePort)                                                   | ~60 s          |
+| Host access          | Applies the MongoDB + Ops Manager NodePort Services                                                              | instant        |
+| PowerSync ConfigMap  | Mounts `powersync.yaml` + `sync-rules.yaml`                                                                      | instant        |
+| Ollama Deployment    | Deploys Ollama in-cluster (PVC + ClusterIP Service); waits for pod ready                                         | ~60 s          |
+| Docker builds        | Builds backend + frontend images and loads them into kind                                                        | ~2–4 min       |
+| Helm releases        | Deploys backend, frontend, powersync via `mongodb/web-app`                                                       | ~60 s each     |
+| Ingress              | Creates `*.localtest.me` ingress rules                                                                           | instant        |
+| Rollout waits        | Waits for all three app Deployments to go Ready                                                                  | ~60 s          |
+| Sample-shelf seed    | Uploads `sample-shelves/` into SeaweedFS so the local Sample picker matches deployed (`scripts/seed-samples.sh`) | instant        |
+| Model pull           | Pulls `qwen2.5vl:3b` into the Ollama pod — **blocking**, so setup waits for CV to be ready                       | ~1–5 min       |
 
 Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 
-### 3. Smoke test
+### 2. Smoke test
 
 ```bash
 ./scripts/verify.sh
@@ -132,14 +144,17 @@ Total: **25–35 minutes** on first run (Ops Manager provisioning dominates).
 
 Checks: ingress reachability, backend health, PowerSync liveness/readiness, the
 host-access ports (27017/8080/8333), MongoDB CR status, `changeStreamPreAndPostImages`,
-JWKS/token endpoints, SeaweedFS round-trip, a real photo capture (if a sample photo
-exists in `scripts/sample-photos/`), and the retention reconciler. Vector search is
-reported as a non-fatal WARN (deferred — needs MongoDB 8.2+).
+JWKS/token endpoints, SeaweedFS round-trip, the sample-shelf gallery
+(`/api/sample-shelves`), **Ollama/CV readiness** (pod + API + the model present —
+a missing model is a hard failure after a bounded wait), a real photo capture
+(using an image from `sample-shelves/` — a 503 is a hard failure), and the
+retention reconciler. Vector search is reported as a non-fatal WARN (deferred —
+needs MongoDB 8.2+).
 
 `setup.sh` itself ends by printing ready-to-use access details for all five
 endpoints (app, MongoDB/Compass, Ops Manager, S3, dev tooling) with live credentials.
 
-### 4. Open the app
+### 3. Open the app
 
 ```
 http://localhost
@@ -151,22 +166,22 @@ context." PowerSync's local database (wa-sqlite/OPFS) needs the Web Locks API,
 which Chrome disables outside a secure context, so the app silently never
 syncs (stuck "offline") if opened via `frontend.localtest.me`.
 
-| URL | What it is |
-|---|---|
-| http://localhost | Web app (use this) |
-| http://frontend.localtest.me | Same web app — alias for curl/devtools use only, PowerSync sync will not work here |
-| http://frontend.localtest.me/api/health | Backend health (via proxy) |
-| http://powersync.localtest.me/probes/liveness | PowerSync liveness |
-| http://powersync.localtest.me/probes/readiness | PowerSync readiness |
-| http://s3.localtest.me/buckets/store-media/ | SeaweedFS filer UI — S3 browser (local dev only) |
-| http://backend.localtest.me/docs | Backend Swagger UI (local dev only) |
+| URL                                            | What it is                                                                         |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| http://localhost                               | Web app (use this)                                                                 |
+| http://frontend.localtest.me                   | Same web app — alias for curl/devtools use only, PowerSync sync will not work here |
+| http://frontend.localtest.me/api/health        | Backend health (via proxy)                                                         |
+| http://powersync.localtest.me/probes/liveness  | PowerSync liveness                                                                 |
+| http://powersync.localtest.me/probes/readiness | PowerSync readiness                                                                |
+| http://s3.localtest.me/buckets/store-media/    | SeaweedFS filer UI — S3 browser (local dev only)                                   |
+| http://backend.localtest.me/docs               | Backend Swagger UI (local dev only)                                                |
 
 The backend has **no production ingress** — the browser reaches it only through
 the frontend's `/api/*` proxy and over in-cluster DNS (PowerSync → JWKS). That proxy is a runtime
 Route Handler (`frontend/app/api/[...path]/route.js`) that reads `BACKEND_URL` at
 request time, so the same image works in every environment with no `NEXT_PUBLIC_*`.
 
-### 5. Connect to MongoDB, Ops Manager, and S3
+### 4. Connect to MongoDB, Ops Manager, and S3
 
 These are exposed on host ports automatically — **no `kubectl port-forward`
 needed**. `setup.sh` prints the exact strings (with live credentials) when it
@@ -196,6 +211,29 @@ path-style, keys `retaildemo` / `retaildemo-secret`:
 AWS_ACCESS_KEY_ID=retaildemo AWS_SECRET_ACCESS_KEY=retaildemo-secret \
   aws s3 ls s3://store-media/ --endpoint-url http://localhost:8333 --region us-east-1
 ```
+
+**Sample-shelf gallery** — the curated images behind the app's **Sample** picker
+(in the Capture panel). The backend serves them read-only via
+`GET /api/sample-shelves`, gated by `STORAGE_SAMPLES_PREFIX` (`sample-shelves/`
+in `infra/local/backend.yaml`). `setup.sh` seeds the images in
+[`sample-shelves/`](../sample-shelves/) into the `store-media` bucket via
+`scripts/seed-samples.sh`, so the local demo matches the deployed one (where the
+equivalent set lives in S3 under `industry/mobile/retail-stock-take/sample-shelves/`).
+
+Add or replace images in `sample-shelves/`, then re-seed without a rebuild:
+
+```bash
+./scripts/seed-samples.sh
+curl -s http://backend.localtest.me/api/sample-shelves | jq
+# expect: {"enabled":true,"items":[ … one entry per image … ]}
+
+AWS_ACCESS_KEY_ID=retaildemo AWS_SECRET_ACCESS_KEY=retaildemo-secret \
+  aws s3 ls s3://store-media/sample-shelves/ --endpoint-url http://localhost:8333 --region us-east-1
+```
+
+> Prefer **stocked** shelves with visible products — the local CV model
+> (Ollama / Qwen2.5-VL) is weaker than the cloud one and returns few or zero
+> items for empty/blank shelves.
 
 ### Dev tooling (local only)
 
@@ -302,6 +340,7 @@ kubectl explain mongodbsearch.spec
 ```
 
 Key things setup.sh assumes that need live-cluster verification:
+
 - Ops Manager Service name: `ops-manager-svc` (adjust `ops-manager-project`
   ConfigMap's `baseUrl` if different)
 - API key Secret name: `mongodb-ops-manager-admin-key` (setup.sh polls for this)
@@ -317,17 +356,16 @@ Deployment → Modify → Version) and update the manifest to match.
 
 ### First capture is slow
 
-The first `/api/inventory/capture` request causes Moondream to load into CPU memory
-inside the Ollama pod. Expect ~30 s before the response. Subsequent captures are
-faster (~10–15 s).
+The first `/api/inventory/capture` request causes the model (Qwen2.5-VL 3B) to
+load into CPU memory inside the Ollama pod. Expect ~30 s before the response.
+`OLLAMA_KEEP_ALIVE=-1` keeps it resident, so subsequent captures are faster.
 
-If the model hasn't finished pulling yet (setup pulls in the background), capture
-returns **503**. Check pull progress:
+Setup pulls the model before finishing, so it should already be present. If a
+capture still returns **503** (`model 'qwen2.5vl:3b' not found`), check and re-pull:
 
 ```bash
-tail -f /tmp/retail-ollama-pull.log
-# or watch from inside the pod:
 kubectl -n retail exec deploy/ollama -- ollama list
+bash scripts/pull-models.sh
 ```
 
 ### localtest.me DNS
@@ -381,6 +419,7 @@ kubectl -n mongodb logs deploy/mongodb-kubernetes-operator
 ```
 
 Common causes:
+
 - Docker Desktop doesn't have enough memory — increase it and re-run `setup.sh`.
 - The Ops Manager image version (`spec.version` in `05-ops-manager.yaml`) is not
   available in the MCK image registry. Try a different version string.
@@ -413,6 +452,7 @@ kubectl -n mongodb logs deploy/mongodb-kubernetes-operator
 ```
 
 If you changed `version` in the MongoDB CR, delete and re-apply it:
+
 ```bash
 kubectl -n mongodb delete mongodb retail-mongodb
 kubectl apply -f infra/k8s/mongodb/10-mongodb-enterprise.yaml
@@ -459,6 +499,7 @@ kubectl -n retail logs deploy/retail-stock-take-backend-web-app --previous
 ```
 
 Common causes:
+
 - `retail-mongodb-uri` Secret missing → `setup.sh` step "connection-string secrets"
   failed. Re-run `setup.sh`.
 - `changeStreamPreAndPostImages` not enabled → the post-init Job failed. Check:

@@ -1,6 +1,6 @@
-"""Startup checks. Self-bootstrapping so the same code works locally (the post-init
-Job pre-creates the collection) and in cloud/Atlas (no post-init Job; Atlas creates
-collections lazily)."""
+"""Startup checks: ensure the inventory collection exists with pre/post images
+enabled, whether or not it was pre-created."""
+
 import logging
 import os
 
@@ -32,15 +32,22 @@ def ensure_collection_ready() -> None:
     if not infos:
         log.info(
             "collection %s.%s missing — creating it with pre/post images (no post-init Job in cloud)",
-            mdb.database_name, coll_name,
+            mdb.database_name,
+            coll_name,
         )
         try:
-            mdb.db.create_collection(coll_name, changeStreamPreAndPostImages={"enabled": True})
+            mdb.db.create_collection(
+                coll_name, changeStreamPreAndPostImages={"enabled": True}
+            )
             return  # freshly created with pre/post images — done
         except CollectionInvalid:
             # Raced with another replica (or a stale pre-check). Fall through and
             # verify pre/post images rather than trusting how it got created.
-            log.info("collection %s.%s created concurrently — verifying", mdb.database_name, coll_name)
+            log.info(
+                "collection %s.%s created concurrently — verifying",
+                mdb.database_name,
+                coll_name,
+            )
         infos = list(mdb.db.list_collections(filter={"name": coll_name}))
         if not infos:
             msg = (
@@ -53,12 +60,20 @@ def ensure_collection_ready() -> None:
     opts = infos[0].get("options", {})
     pre_post = opts.get("changeStreamPreAndPostImages") or {}
     if pre_post.get("enabled"):
-        log.info("collection %s.%s ready (pre/post images enabled)", mdb.database_name, coll_name)
+        log.info(
+            "collection %s.%s ready (pre/post images enabled)",
+            mdb.database_name,
+            coll_name,
+        )
         return
 
-    log.info("enabling changeStreamPreAndPostImages on %s.%s", mdb.database_name, coll_name)
+    log.info(
+        "enabling changeStreamPreAndPostImages on %s.%s", mdb.database_name, coll_name
+    )
     try:
-        mdb.db.command({"collMod": coll_name, "changeStreamPreAndPostImages": {"enabled": True}})
+        mdb.db.command(
+            {"collMod": coll_name, "changeStreamPreAndPostImages": {"enabled": True}}
+        )
     except OperationFailure as e:
         if getattr(e, "code", None) == 13:  # Unauthorized
             log.warning(
@@ -70,5 +85,10 @@ def ensure_collection_ready() -> None:
                 e,
             )
             return
-        log.error("failed to enable changeStreamPreAndPostImages on %s.%s: %s", mdb.database_name, coll_name, e)
+        log.error(
+            "failed to enable changeStreamPreAndPostImages on %s.%s: %s",
+            mdb.database_name,
+            coll_name,
+            e,
+        )
         raise

@@ -1,15 +1,12 @@
 import { column, Schema, Table } from '@powersync/web';
 
 // Single source of truth for the PowerSync sync schema.
-// (Folded in from the former packages/schema workspace; Phase 2 mobile will
-// import this same module.)
 //
-// MongoDB convention: documents use `_id` as the primary key, but PowerSync
-// sync rules require a string column named `id`. The sync rule projects
-// `_id AS id`, so on the client side the table's PK column is `id` (text).
+// `_id` is the primary key, but PowerSync sync rules require a string column
+// named `id`; the rule projects `_id AS id`, so the client PK column is `id`.
 //
-// Nested MongoDB fields (e.g. `items`) arrive as JSON-text columns and are
-// parsed by consumers (see useInventory hook).
+// Nested fields (e.g. `items`) arrive as JSON-text columns, parsed by consumers
+// (see useInventory hook).
 //
 // When you change a column here, update two more places in lockstep:
 //   - powersync/sync-rules.yaml  (the global_inventory projection)

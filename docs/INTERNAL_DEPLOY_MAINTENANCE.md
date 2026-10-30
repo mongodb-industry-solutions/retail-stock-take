@@ -9,10 +9,10 @@ Kanopy cluster. Not intended for demo participants.
 
 Three `mongodb/web-app` (chart 4.30.0) Helm releases, deployed via Drone:
 
-| Release | Ingress | Notes |
-|---|---|---|
-| `retail-stock-take-backend` | None (internal) | FastAPI; reached via frontend proxy + PS JWKS |
-| `retail-stock-take-frontend` | Yes (app) | Next.js standalone |
+| Release                       | Ingress         | Notes                                          |
+| ----------------------------- | --------------- | ---------------------------------------------- |
+| `retail-stock-take-backend`   | None (internal) | FastAPI; reached via frontend proxy + PS JWKS  |
+| `retail-stock-take-frontend`  | Yes (app)       | Next.js standalone                             |
 | `retail-stock-take-powersync` | Yes (WebSocket) | upstream `journeyapps/powersync-service` image |
 
 Images (backend + frontend) are built by Drone → pushed to ECR. PowerSync uses the
@@ -29,18 +29,18 @@ object **and** the Mongo doc are deleted by the reconciler. The curated
 
 ## Environments
 
-| Git branch | Drone pipeline | Kanopy API server | Namespace |
-|---|---|---|---|
-| `staging` | `staging` | `api.staging.corp.mongodb.com` | `industrysolutions` |
-| `main` | `production` | `api.prod.corp.mongodb.com` | `industrysolutions` |
+| Git branch | Drone pipeline | Kanopy API server              | Namespace           |
+| ---------- | -------------- | ------------------------------ | ------------------- |
+| `staging`  | `staging`      | `api.staging.corp.mongodb.com` | `industrysolutions` |
+| `main`     | `production`   | `api.prod.corp.mongodb.com`    | `industrysolutions` |
 
 ### URLs
 
-| | Staging | Production |
-|---|---|---|
-| App (frontend) | `https://retail-stock-take-frontend.industrysolutions.staging.corp.mongodb.com` | `https://retail-stock-take-frontend.industrysolutions.prod.corp.mongodb.com` |
-| PowerSync | `https://retail-stock-take-powersync.industrysolutions.staging.corp.mongodb.com` | `https://retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com` |
-| Health (via proxy) | `<frontend-url>/api/health` | `<frontend-url>/api/health` |
+|                    | Staging                                                                          | Production                                                                    |
+| ------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| App (frontend)     | `https://retail-stock-take-frontend.industrysolutions.staging.corp.mongodb.com`  | `https://retail-stock-take-frontend.industrysolutions.prod.corp.mongodb.com`  |
+| PowerSync          | `https://retail-stock-take-powersync.industrysolutions.staging.corp.mongodb.com` | `https://retail-stock-take-powersync.industrysolutions.prod.corp.mongodb.com` |
+| Health (via proxy) | `<frontend-url>/api/health`                                                      | `<frontend-url>/api/health`                                                   |
 
 ---
 
@@ -60,7 +60,7 @@ push. Drone will fail silently if secrets/configmaps are missing.
   missing — this uses only `createCollection` (granted by `readWrite`), so no
   manual step and no `dbAdmin` are needed for a fresh deploy. (Locally, mongo-init
   already does this.)
-  - **Only if the collection already exists *without* pre/post images** does the
+  - **Only if the collection already exists _without_ pre/post images** does the
     backend fall back to `collMod` — which requires **`dbAdmin`**. If your `app`
     user lacks it, the backend logs a warning (non-fatal) and you enable it once
     with an admin user:
@@ -68,20 +68,31 @@ push. Drone will fail silently if secrets/configmaps are missing.
     ```js
     db.getSiblingDB("retail-stock-take").runCommand({
       collMod: "inventory_captures",
-      changeStreamPreAndPostImages: { enabled: true }
-    })
+      changeStreamPreAndPostImages: { enabled: true },
+    });
     ```
 
 - Whitelist the Kanopy egress IPs in Atlas Network Access.
 
 ### 2. Grove (cloud CV provider)
 
+Cloud CV calls Grove's **new AI Gateway** at
+`https://ai-gateway.corp.mongodb.com/openai/v1` (the legacy Azure gateway
+`grove-gateway-prod.azure-api.net` is sunset **2026-12-01**). Auth is a standard
+`Authorization: Bearer <gateway key>` header — the legacy custom `api-key` header
+is no longer used.
+
 Request access at **grove.aix.prod.corp.mongodb.com/requests** — a **service
-(tier-2) key** for a vision model (default `gpt-5.5`, fallback `gpt-4o`; any
-vision-capable Grove model works). The request's **Usage** section shows the
-provisioned base URL + model; override `GROVE_BASE_URL` / `GROVE_MODEL` in
-`environment/*-backend.yaml` if they differ from the defaults. The key goes into
-the `retail-stock-take` Secret as `GROVE_API_KEY` (next step).
+(tier-2) key** for a vision model (default `gpt-5.5`, fallback `gpt-4o`; confirm
+IDs against `GET https://ai-gateway.corp.mongodb.com/openai/v1/models`). The key
+goes into the `retail-stock-take` Secret as `GROVE_API_KEY` (next step) and must
+be a **new gateway key** — legacy keys are rejected with 401. Override
+`GROVE_BASE_URL` / `GROVE_MODEL` in `environment/*-backend.yaml` if they differ
+from the defaults.
+
+> **Reachability:** the new gateway requires an internal IP / VPN (IP ACL).
+> Kanopy pods reach it over the corporate network; if a deployment cannot, a
+> Kanopy VPC endpoint may be required. Verify from the cluster before cutover.
 
 > **AWS S3 (photo store) — already configured.** The cloud backend writes frames
 > to the **shared `industry-solutions-demos`** bucket under
@@ -110,7 +121,7 @@ Keep the private key out of the repo. Store it in a password manager.
 ### 4. Kubernetes secrets and configmap — cloud secrets checklist
 
 Three namespace objects must exist **before** the Drone deploy runs — Helm only
-*references* them, it never creates them. Create all three in **each** target
+_references_ them, it never creates them. Create all three in **each** target
 cluster (staging **and** prod). A missing/renamed object → pods crash-loop.
 
 - [ ] **Secret `retail-stock-take`** — `MONGODB_URI`, `PS_DATA_SOURCE_URI`,
@@ -165,12 +176,12 @@ kubectl -n "$NAMESPACE" get configmap powersync-config -o name
 
 In Drone CI (drone.corp.mongodb.com), add these repository secrets:
 
-| Secret name | Value |
-|---|---|
-| `ecr_access_key` | AWS access key with ECR push rights |
-| `ecr_secret_key` | Corresponding secret key |
-| `staging_kubernetes_token` | Kanopy staging service account token |
-| `prod_kubernetes_token` | Kanopy production service account token |
+| Secret name                | Value                                   |
+| -------------------------- | --------------------------------------- |
+| `ecr_access_key`           | AWS access key with ECR push rights     |
+| `ecr_secret_key`           | Corresponding secret key                |
+| `staging_kubernetes_token` | Kanopy staging service account token    |
+| `prod_kubernetes_token`    | Kanopy production service account token |
 
 ### 6. Trigger the first deploy
 
@@ -188,6 +199,7 @@ On every push to `staging` or `main`, Drone:
 3. `helm upgrade --install` for backend, frontend, powersync in sequence
 
 Each deploy step merges:
+
 - A shared base (`environment/staging.yaml` or `environment/production.yaml`) — IRSA,
   data classification, owner email, `AWS_REGION`
 - A per-service file (`environment/<env>-<service>.yaml`) — ports, probes, env vars,
@@ -205,40 +217,40 @@ PowerSync is **not built** — the Drone step sets `image.repository` +
 
 ### Shared env (all services, both envs)
 
-| Key | Value | Notes |
-|---|---|---|
+| Key          | Value       | Notes                                |
+| ------------ | ----------- | ------------------------------------ |
 | `AWS_REGION` | `us-east-1` | Set in the base `environment/*.yaml` |
 
 ### Backend env
 
-| Key | Staging | Production | Notes |
-|---|---|---|---|
-| `STORAGE_PROVIDER` | `s3` | `s3` | Object store on; frames → `industry-solutions-demos` `.../uploads/`, 3-mo retention (object + doc), samples served via `/api/sample-shelves` |
-| `CV_PROVIDER` | `grove` | `grove` | Cloud vision backend (local uses `ollama`) |
-| `GROVE_BASE_URL` | Grove gateway URL | same | OpenAI-compatible endpoint; from your Grove request |
-| `GROVE_MODEL` | `gpt-5.5` | `gpt-5.5` | Primary vision model (env-overridable) |
-| `GROVE_FALLBACK_MODEL` | `gpt-4o` | `gpt-4o` | Auto-fallback on failure |
-| `GROVE_API_KEY` | from secret | from secret | Grove key, key in `retail-stock-take` |
-| `RETENTION_DAYS` | `7` | `30` | Days before docs expire (no-op while photo store off) |
-| `POWERSYNC_PUBLIC_URL` | `https://…staging.corp.mongodb.com` | `https://…prod.corp.mongodb.com` | Delivered to browser via `/api/auth/token` |
-| `POWERSYNC_INTERNAL_URL` | `http://retail-stock-take-powersync-web-app-80` | same | In-cluster health probe |
-| `MONGODB_URI` | from secret | from secret | Atlas SRV string, key in `retail-stock-take` |
+| Key                      | Staging                                         | Production                       | Notes                                                                                                                                        |
+| ------------------------ | ----------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STORAGE_PROVIDER`       | `s3`                                            | `s3`                             | Object store on; frames → `industry-solutions-demos` `.../uploads/`, 3-mo retention (object + doc), samples served via `/api/sample-shelves` |
+| `CV_PROVIDER`            | `grove`                                         | `grove`                          | Cloud vision backend (local uses `ollama`)                                                                                                   |
+| `GROVE_BASE_URL`         | `https://ai-gateway.corp.mongodb.com/openai/v1` | same                             | Grove **new AI Gateway** (OpenAI-compatible); Bearer auth                                                                                    |
+| `GROVE_MODEL`            | `gpt-5.5`                                       | `gpt-5.5`                        | Primary vision model (env-overridable; confirm via `/openai/v1/models`)                                                                      |
+| `GROVE_FALLBACK_MODEL`   | `gpt-4o`                                        | `gpt-4o`                         | Auto-fallback on failure                                                                                                                     |
+| `GROVE_API_KEY`          | from secret                                     | from secret                      | Grove **gateway key** (new gateway), key in `retail-stock-take`                                                                              |
+| `RETENTION_DAYS`         | `7`                                             | `30`                             | Days before docs expire (no-op while photo store off)                                                                                        |
+| `POWERSYNC_PUBLIC_URL`   | `https://…staging.corp.mongodb.com`             | `https://…prod.corp.mongodb.com` | Delivered to browser via `/api/auth/token`                                                                                                   |
+| `POWERSYNC_INTERNAL_URL` | `http://retail-stock-take-powersync-web-app-80` | same                             | In-cluster health probe                                                                                                                      |
+| `MONGODB_URI`            | from secret                                     | from secret                      | Atlas SRV string, key in `retail-stock-take`                                                                                                 |
 
 ### Frontend env
 
-| Key | Value | Notes |
-|---|---|---|
+| Key           | Value                                         | Notes                                            |
+| ------------- | --------------------------------------------- | ------------------------------------------------ |
 | `BACKEND_URL` | `http://retail-stock-take-backend-web-app-80` | In-cluster Service name (`<release>-web-app-80`) |
-| `NODE_ENV` | `production` | |
+| `NODE_ENV`    | `production`                                  |                                                  |
 
 ### PowerSync env
 
-| Key | Value | Notes |
-|---|---|---|
-| `PS_JWKS_URL` | `http://retail-stock-take-backend-web-app-80/api/auth/keys` | In-cluster; backend need not have ingress |
-| `PS_DATA_SOURCE_URI` | from secret | Atlas SRV for the source (`retail-stock-take`) DB |
-| `PS_MONGO_URI` | from secret | Atlas SRV for the PowerSync bucket (`rs-powersync`) DB |
-| `POWERSYNC_CONFIG_PATH` | `/config/powersync.yaml` | Mounted from `powersync-config` ConfigMap |
+| Key                     | Value                                                       | Notes                                                  |
+| ----------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `PS_JWKS_URL`           | `http://retail-stock-take-backend-web-app-80/api/auth/keys` | In-cluster; backend need not have ingress              |
+| `PS_DATA_SOURCE_URI`    | from secret                                                 | Atlas SRV for the source (`retail-stock-take`) DB      |
+| `PS_MONGO_URI`          | from secret                                                 | Atlas SRV for the PowerSync bucket (`rs-powersync`) DB |
+| `POWERSYNC_CONFIG_PATH` | `/config/powersync.yaml`                                    | Mounted from `powersync-config` ConfigMap              |
 
 ---
 
@@ -255,7 +267,7 @@ Change `image.tag` in the Drone deploy step for powersync (both `staging` and
 `production` pipelines in `.drone.yml`), then push to trigger a redeploy:
 
 ```yaml
-- "image.tag=1.22.0"   # was 1.21.0
+- "image.tag=1.22.0" # was 1.21.0
 ```
 
 ### Rotating JWT keys
@@ -309,9 +321,11 @@ kubectl -n industrysolutions rollout restart deploy/retail-stock-take-powersync-
   curated `sample-shelves/` gallery is served read-only via `/api/sample-shelves`
   (bytes proxied to the browser). IRSA S3 permissions + optional cross-account
   bucket policy are in Prerequisites §2.
-- **Cloud CV depends on a valid Grove key.** If `GROVE_API_KEY` is missing or
-  the model isn't provisioned, capture returns 503 and `/api/health` shows the
-  `cv` field as `GROVE_API_KEY not set` (or the Grove error). Local capture is
+- **Cloud CV depends on a valid Grove gateway key.** Cloud CV calls the new AI
+  Gateway (`ai-gateway.corp.mongodb.com`, Bearer auth). If `GROVE_API_KEY` is
+  missing, a legacy key, or the model isn't provisioned, capture returns 503 and
+  `/api/health` shows the `cv` field as `GROVE_API_KEY not set` (or the gateway
+  error). The new gateway also requires an internal IP / VPN. Local capture is
   unaffected (it uses Ollama).
 - **No `NEXT_PUBLIC_*` vars.** All runtime config (PowerSync URL, backend URL) is
   delivered at runtime via the Next.js proxy and `/api/auth/token`. Do not bake
@@ -337,6 +351,7 @@ kubectl -n industrysolutions logs deploy/retail-stock-take-backend-web-app --pre
 ```
 
 Common causes:
+
 - `retail-stock-take` Secret missing or has wrong key names.
 - `jwt-keys` Secret missing.
 - Atlas connection string wrong (typo in SRV, password special chars not URL-encoded).

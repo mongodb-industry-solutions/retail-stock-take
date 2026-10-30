@@ -36,7 +36,7 @@ export const TALK_TRACK = [
     content: [
       {
         heading: "Architecture",
-        body: "The browser posts the photo to a FastAPI backend, which runs the CV model (Ollama / Moondream), writes the inventory document to MongoDB, and persists the raw frame to S3-compatible object storage. MongoDB change streams feed PowerSync, which syncs the data to each client's local SQLite database over a WebSocket. The browser renders directly from that local database, so reads are instant and keep working offline.",
+        body: "The browser posts the photo to a FastAPI backend, which runs the CV model (Ollama / Qwen2.5-VL), writes the inventory document to MongoDB, and persists the raw frame to S3-compatible object storage. MongoDB change streams feed PowerSync, which syncs the data to each client's local SQLite database over a WebSocket. The browser renders directly from that local database, so reads are instant and keep working offline.",
       },
       {
         heading: "Data flow",

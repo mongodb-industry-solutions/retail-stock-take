@@ -48,6 +48,11 @@ die()  { err "$*"; exit 1; }
 # hl:   wrap a value in bold cyan for emphasis inside a sentence (URLs, creds…).
 hl()   { printf '%s%s%s' "$C_BOLD$C_CYAN" "$*" "$C_RESET"; }
 
+# Path to the local stack's dedicated kubeconfig (override with KIND_KUBECONFIG).
+kind_kubeconfig() {
+  printf '%s' "${KIND_KUBECONFIG:-$HOME/.kube/${KIND_CLUSTER:-retail-stock-take}-config}"
+}
+
 # ---------------------------------------------------------------------------
 # spin_wait — poll a condition with an animated spinner
 # ---------------------------------------------------------------------------

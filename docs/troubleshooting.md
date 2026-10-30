@@ -146,17 +146,33 @@ If models are missing (e.g. after a `make reset`), re-pull:
 bash scripts/pull-models.sh
 ```
 
+`make verify` treats a missing model (and a 503 capture) as a **hard failure**, so
+it won't report success while CV is down. The `ollama/ollama` image is ~2.8 GB —
+a first-run image pull can take ~5 min (the readiness wait allows up to
+`OLLAMA_READY_TIMEOUT`, default 900s).
+
 If the pod is in `CrashLoopBackOff`, it likely needs more memory — increase Docker
 Desktop's RAM allocation (Settings → Resources → Memory).
+
+### Capture returns 503 with `400 ... exceeds the available context size`
+
+The image tokenizes into more tokens than the model's context window. Raise
+`OLLAMA_NUM_CTX` in `infra/local/backend.yaml` (default `16384`; a full-resolution
+shelf photo is ~4k tokens) and re-apply the backend:
+
+```bash
+make setup    # rebuilds + redeploys; heavy steps are already up
+```
 
 ### CV returns unexpected items / hallucinations, or capture is slow
 
 Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).
-`moondream` (~10–30 s/capture) is the default. `qwen2.5vl:7b` is available as the
-fallback but is significantly slower on CPU (~2–5 min/capture). Switch primary model
-by setting `OLLAMA_MODEL=qwen2.5vl:7b` in `infra/local/backend.yaml`, then:
+`qwen2.5vl:3b` is the default — small enough for CPU, but strong at reading
+labels and returning valid structured JSON. To switch models, set `OLLAMA_MODEL`
+in `infra/local/backend.yaml`, pull it, then restart the backend:
 
 ```bash
+kubectl -n retail exec deploy/ollama -- ollama pull <model>
 kubectl -n retail rollout restart deploy/retail-stock-take-backend-web-app
 ```
 

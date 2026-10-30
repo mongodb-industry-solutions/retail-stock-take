@@ -64,6 +64,7 @@ export function CaptureForm() {
 
   async function pickSample(name) {
     setSampleError(null);
+    setSampleOpen(false); // close on selection; the capture continues in the main view
     setPickingName(name);
     try {
       const res = await fetch(`/api/sample-shelves/image?name=${encodeURIComponent(name)}`);
@@ -73,7 +74,6 @@ export function CaptureForm() {
       applyFile(f); // show in the dropzone
       await submit(f); // same capture -> CV -> store -> sync path
       clearFile();
-      setSampleOpen(false);
     } catch (e) {
       setSampleError(String(e?.message || e));
     } finally {
@@ -140,7 +140,7 @@ export function CaptureForm() {
               type="button"
               variant="default"
               leftGlyph={<Icon glyph="Copy" />}
-              onClick={() => setSampleOpen(true)}
+              onClick={() => { setSampleError(null); setSampleOpen(true); }}
               disabled={busy}
             >
               Sample
@@ -164,7 +164,6 @@ export function CaptureForm() {
         <Overline style={{ color: 'var(--mdb-muted)', marginBottom: 12, display: 'block' }}>
           Pick a sample shelf
         </Overline>
-        {sampleError && <Banner variant="danger">{sampleError}</Banner>}
         {samples.error && <Banner variant="warning">{samples.error}</Banner>}
         {samples.loading ? (
           <Description style={{ color: 'var(--mdb-muted)' }}>Loading…</Description>
@@ -196,7 +195,8 @@ export function CaptureForm() {
       </Modal>
 
       {error && <Banner variant="danger">{error}</Banner>}
-      {lastResult && !error && (
+      {sampleError && <Banner variant="danger">{sampleError}</Banner>}
+      {lastResult && !error && !sampleError && (
         <Banner variant="success">
           {lastResult.items?.length || 0} item
           {(lastResult.items?.length || 0) === 1 ? '' : 's'} detected via{' '}

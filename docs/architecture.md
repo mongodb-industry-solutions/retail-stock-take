@@ -57,17 +57,17 @@ drop the row). The detailed `asset` sub-document stays server-side until then.
 
 ## Services (local kind)
 
-| Component | Image / source | Role |
-|---|---|---|
-| MCK operator | `mongodb/mongodb-kubernetes` ~1.8.1 | Manages the MongoDB + MongoDBSearch CRs (self-hosted Ops Manager-backed). |
-| Ops Manager | `MongoDBOpsManager` (operator) | In-cluster control plane (automation agent) for the Enterprise deployment. |
-| MongoDB | Enterprise 8.0.9-ent (operator) | Single-node replica set; source DB + PowerSync bucket DB. |
-| mongot (Search) | `MongoDBSearch` ~0.64.0 (**Preview**) | Self-hosted `$vectorSearch` / `$search`. **Deferred** locally — needs MongoDB 8.2+; Ops Manager 8.0 provisions 8.0.9-ent. |
-| SeaweedFS | `chrislusf/seaweedfs` (`weed server -s3`) | Local S3 gateway (the AWS S3 stand-in). S3 on :8333, filer UI on :8888 (dev tooling). |
-| backend | local `backend/Dockerfile` | FastAPI: auth, health, inventory ingest, storage adapter, reconciler. Internal Service (no ingress). |
-| powersync | `journeyapps/powersync-service:1.21.0` | Replication + sync API (unified). Config from a ConfigMap. |
-| frontend | local `frontend/Dockerfile` | Next.js (standalone), COOP/COEP headers, `/api/*` proxy. |
-| Ollama | `ollama/ollama:latest` | In-cluster VLM server (CPU inference). Moondream primary; qwen2.5vl:7b optional (set OLLAMA_FALLBACK_MODEL). OLLAMA_ORIGINS baked in — no host process needed. Models on a 10 Gi PVC. |
+| Component       | Image / source                            | Role                                                                                                                                                                                                                  |
+| --------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCK operator    | `mongodb/mongodb-kubernetes` ~1.8.1       | Manages the MongoDB + MongoDBSearch CRs (self-hosted Ops Manager-backed).                                                                                                                                             |
+| Ops Manager     | `MongoDBOpsManager` (operator)            | In-cluster control plane (automation agent) for the Enterprise deployment.                                                                                                                                            |
+| MongoDB         | Enterprise 8.0.9-ent (operator)           | Single-node replica set; source DB + PowerSync bucket DB.                                                                                                                                                             |
+| mongot (Search) | `MongoDBSearch` ~0.64.0 (**Preview**)     | Self-hosted `$vectorSearch` / `$search`. **Deferred** locally — needs MongoDB 8.2+; Ops Manager 8.0 provisions 8.0.9-ent.                                                                                             |
+| SeaweedFS       | `chrislusf/seaweedfs` (`weed server -s3`) | Local S3 gateway (the AWS S3 stand-in). S3 on :8333, filer UI on :8888 (dev tooling).                                                                                                                                 |
+| backend         | local `backend/Dockerfile`                | FastAPI: auth, health, inventory ingest, storage adapter, reconciler. Internal Service (no ingress).                                                                                                                  |
+| powersync       | `journeyapps/powersync-service:1.21.0`    | Replication + sync API (unified). Config from a ConfigMap.                                                                                                                                                            |
+| frontend        | local `frontend/Dockerfile`               | Next.js (standalone), COOP/COEP headers, `/api/*` proxy.                                                                                                                                                              |
+| Ollama          | `ollama/ollama:latest`                    | In-cluster VLM server (CPU inference). `qwen2.5vl:3b` primary — strong OCR + structured JSON at a CPU-friendly size. `OLLAMA_ORIGINS` + `OLLAMA_KEEP_ALIVE` baked in — no host process needed. Models on a 10 Gi PVC. |
 
 backend / frontend / powersync all deploy through the **same `mongodb/web-app`
 Helm chart** used on Kanopy — local (`infra/local/*.yaml`) vs cloud
@@ -108,11 +108,15 @@ validates against that JWKS. Keys are mounted from the `jwt-keys` Secret. No
 
 Ollama runs **in-cluster** as a Deployment (`infra/k8s/ollama/ollama.yaml`).
 No host Ollama process is needed. Docker Desktop on Mac runs containers
-CPU-only (no Metal/MPS pass-through), so `moondream` (~10–30 s/capture) is
-the practical primary model; `qwen2.5vl:7b` is optional. `OLLAMA_ORIGINS`
-is baked into the manifest, so the Host-header DNS-rebinding check never blocks
-in-cluster requests. Models persist on a 10 Gi PVC and survive pod restarts.
-Strict-JSON prompt + Pydantic validation; 503 on failure rather than writing garbage.
+CPU-only (no Metal/MPS pass-through), so a small model is required:
+`qwen2.5vl:3b` is the practical primary — it reads product labels and returns
+valid `{"items": [...]}` far more reliably than the previous `moondream`
+default, at a CPU-friendly size (`OLLAMA_KEEP_ALIVE=-1` keeps it resident).
+`OLLAMA_ORIGINS` is baked into the manifest, so the Host-header DNS-rebinding
+check never blocks in-cluster requests. Models persist on a 10 Gi PVC and
+survive pod restarts. Strict-JSON prompt + Pydantic validation + a tolerant
+parse and bounded retries; 503 only if every attempt fails rather than writing
+garbage.
 **Cloud has no Ollama** — the capture CV step is local-only until a cloud provider
 (e.g. Bedrock — deps would need re-adding) is wired. Storage + sync work everywhere;
 **Vector Search is a Preview feature deferred on the local stack** (it needs

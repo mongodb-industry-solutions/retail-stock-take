@@ -150,3 +150,9 @@ frontend/Thumbs.db
 frontend/coverage/
 frontend/jest/
 frontend/*.tgz
+
+#-------------------------------------------------------- Env files --------------------------------------------------------
+# Never bake local env files / secrets into images.
+.env
+**/.env
+frontend/.env*

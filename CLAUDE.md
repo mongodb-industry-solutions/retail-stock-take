@@ -47,7 +47,7 @@ backend (FastAPI)  ── /api/auth/{token,keys}, /api/inventory/capture, /api/h
    │  └─ insert metadata + asset ref ─▶ MongoDB
 PowerSync ── change streams (pre/post images) ─▶ WebSocket push ─▶ browser SQLite
 MongoDB Enterprise RS + mongot Search (MCK operator, Ops Manager managed — in-cluster)
-Ollama IN-CLUSTER (Moondream primary; Qwen2.5-VL 7B optional) — ClusterIP Service
+Ollama IN-CLUSTER (Qwen2.5-VL 3B) — ClusterIP Service
   `ollama:11434`, models on 10 Gi PVC (no host Ollama needed)
 ```
 
@@ -109,11 +109,14 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   (photo uploads go to `/api/inventory/capture`).
 - MongoDB documents: `_id` is a UUID **string** (not ObjectId).
 - **CV provider is config-selected** via `CV_PROVIDER` (`backend/cv/__init__.py`):
-  local = **Ollama** (in-cluster), cloud = **Grove** (MongoDB's GenAI gateway —
-  OpenAI-compatible + vision, `api-key` header). Both share the
-  `analyze_shelf_image(bytes, model, fallback) -> (CVResponse, str)` contract and
-  a unified `CVError`. Cloud default `GROVE_MODEL=gpt-5.5`, fallback `gpt-4o`
-  (env-overridable); `GROVE_API_KEY` from `retail-stock-take`. Add a new
+  local = **Ollama** (in-cluster, `qwen2.5vl:3b`), cloud = **Grove** (MongoDB's
+  GenAI gateway — OpenAI-compatible + vision). Targets Grove's **new AI Gateway**
+  (`GROVE_BASE_URL=https://ai-gateway.corp.mongodb.com/openai/v1`) with
+  `Authorization: Bearer` auth (the legacy Azure `api-key` header is gone). Both
+  share the `analyze_shelf_image(bytes, model, fallback) -> (CVResponse, str)`
+  contract and a unified `CVError`. Cloud default `GROVE_MODEL=gpt-5.5`, fallback
+  `gpt-4o` (env-overridable; confirm IDs against `GET /openai/v1/models`);
+  `GROVE_API_KEY` (a new gateway key) from `retail-stock-take`. Add a new
   provider = new `cv/<name>_client.py` + a branch in `cv/__init__.py`.
 
 ## Tech stack (pinned)
@@ -138,9 +141,9 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   When you change a synced column, update three places in lockstep: this schema,
   `powersync/sync-rules.yaml`, and the writer in `backend/api/inventory.py`.
 - Storage access goes through `backend/storage/get_storage_adapter()` only.
-- Config: env-driven. `.env.example` documents the contract; local cluster values
-  live in `infra/local/*.yaml`, cloud (Kanopy) values in `environment/*.yaml`
-  (a shared base + per-service file). PowerSync needs `PS_*` vars for `!env`.
+- Config: env-driven. Local cluster values live in `infra/local/*.yaml`, cloud
+  (Kanopy) values in `environment/*.yaml` (a shared base + per-service file).
+  PowerSync needs `PS_*` vars for `!env`.
 - Backend split: routes in `backend/api/`, CV in `backend/cv/`, storage in
   `backend/storage/`, retention in `backend/retention/`, DB connector in
   `backend/db/mdb.py`.
@@ -151,7 +154,6 @@ A retention reconciler promotes/expires docs and deletes objects past `expires_a
   rule).
 - COOP/COEP headers in `frontend/next.config.mjs` — needed for OPFS persistence
   of wa-sqlite. Don't remove. Frontend builds `output: 'standalone'`.
-- `.env.example` lives at root (note: the harness blocks direct `.env*` writes — use `mv` or have the user rename it).
 - Kanopy/Drone is live: `.drone.yml` (separate pods, 3 releases) + `environment/`.
   Cloud needs manual prereqs: Atlas + the k8s secrets/configmap + the Drone CI
   secrets (see `.drone.yml` header and `docs/KANOPY_DEPLOYMENT_README.md`).
