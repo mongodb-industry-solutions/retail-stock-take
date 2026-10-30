@@ -5,9 +5,10 @@ implementation (S3-compatible); `STORAGE_PROVIDER` exists so future backends
 can be added without touching business logic.
 
 Local (SeaweedFS):  STORAGE_ENDPOINT + STORAGE_ACCESS_KEY/SECRET_KEY + STORAGE_FORCE_PATH_STYLE=true
-Cloud (AWS S3):     omit endpoint + keys (IRSA via the default credential chain); set AWS_REGION + STORAGE_BUCKET
+Cloud (AWS S3):     omit endpoint + keys (ambient AWS credentials); set AWS_REGION + STORAGE_BUCKET
 No photo store:     STORAGE_PROVIDER=none — capture keeps metadata only (no asset); see api/inventory.py
 """
+
 from __future__ import annotations
 
 import functools
@@ -32,7 +33,9 @@ def storage_enabled() -> bool:
 def get_storage_adapter() -> StorageAdapter:
     provider = os.environ.get("STORAGE_PROVIDER", "s3").lower()
     if provider != "s3":
-        raise ValueError(f"unsupported STORAGE_PROVIDER {provider!r} (only 's3' is supported)")
+        raise ValueError(
+            f"unsupported STORAGE_PROVIDER {provider!r} (only 's3' is supported)"
+        )
 
     return S3StorageAdapter(
         bucket=os.environ.get("STORAGE_BUCKET", "store-media"),

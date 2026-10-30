@@ -2,11 +2,12 @@
 
 One implementation serves both backends:
   - LOCAL  : SeaweedFS S3 gateway — explicit endpoint_url + static keys + path-style.
-  - CLOUD  : AWS S3 — no endpoint, no static keys (boto3's default credential
-             chain resolves IRSA on Kanopy), virtual-host addressing.
+  - CLOUD  : AWS S3 — no endpoint/keys (boto3 default credential chain),
+             virtual-host addressing.
 
 Only the common S3 subset is used (Put/Get/Head/Delete/ListV2).
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,8 +48,8 @@ class S3StorageAdapter(StorageAdapter):
             client_kwargs["endpoint_url"] = endpoint_url
         if region:
             client_kwargs["region_name"] = region
-        # When keys are omitted, boto3 falls back to the default credential
-        # chain (env / instance / IRSA) — the cloud path.
+        # When keys are omitted, boto3 falls back to its default credential
+        # chain — the cloud path.
         if access_key and secret_key:
             client_kwargs["aws_access_key_id"] = access_key
             client_kwargs["aws_secret_access_key"] = secret_key
@@ -64,7 +65,11 @@ class S3StorageAdapter(StorageAdapter):
             code = e.response.get("Error", {}).get("Code")
             if code not in _NOT_FOUND_CODES:
                 # e.g. AccessDenied on a pre-provisioned cloud bucket — leave it.
-                log.warning("head_bucket(%s) inconclusive (%s); assuming it exists", self.bucket, code)
+                log.warning(
+                    "head_bucket(%s) inconclusive (%s); assuming it exists",
+                    self.bucket,
+                    code,
+                )
                 return
         # Bucket missing — create it (local SeaweedFS path).
         params: dict = {"Bucket": self.bucket}
@@ -88,7 +93,10 @@ class S3StorageAdapter(StorageAdapter):
             extra["Metadata"] = {k: str(v) for k, v in metadata.items()}
         resp = self._client.put_object(Bucket=self.bucket, Key=key, Body=data, **extra)
         return ObjectStat(
-            key=key, size_bytes=len(data), etag=resp.get("ETag"), content_type=content_type
+            key=key,
+            size_bytes=len(data),
+            etag=resp.get("ETag"),
+            content_type=content_type,
         )
 
     def get_object(self, key) -> bytes:

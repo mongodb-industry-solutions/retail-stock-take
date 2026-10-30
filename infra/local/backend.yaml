@@ -45,6 +45,11 @@ env:
   STORAGE_ACCESS_KEY: retaildemo
   STORAGE_SECRET_KEY: retaildemo-secret
   STORAGE_FORCE_PATH_STYLE: "true"
+  # Curated sample-shelf gallery served read-only by /api/sample-shelves.
+  # Seeded from ./sample-shelves/ into the store-media bucket by
+  # scripts/seed-samples.sh (invoked from setup.sh). Empty value hides the
+  # gallery in the UI.
+  STORAGE_SAMPLES_PREFIX: sample-shelves/
   # retention
   RETENTION_DAYS: "7"
   RETENTION_CLASS: standard
@@ -60,15 +65,14 @@ env:
   # PowerSync URLs: public (browser, via Ingress) + internal (health probe)
   POWERSYNC_PUBLIC_URL: http://powersync.localtest.me
   POWERSYNC_INTERNAL_URL: http://retail-stock-take-powersync-web-app-80
-  # CV: Ollama runs in-cluster (infra/k8s/ollama/ollama.yaml). Cloud uses Grove
-  # instead (CV_PROVIDER=grove in environment/*-backend.yaml).
-  # Moondream only — no fallback (qwen2.5vl:7b exceeds available CPU memory).
-  # 300s timeout covers cold-start model load on first capture.
+  # CV: Ollama in-cluster (infra/k8s/ollama/ollama.yaml); cloud uses Grove
+  # (CV_PROVIDER=grove in environment/*-backend.yaml).
   CV_PROVIDER: ollama
   OLLAMA_BASE_URL: http://ollama:11434
-  OLLAMA_MODEL: moondream
+  OLLAMA_MODEL: qwen2.5vl:3b
   OLLAMA_FALLBACK_MODEL: ""
   OLLAMA_REQUEST_TIMEOUT_SECONDS: "300"
+  OLLAMA_NUM_CTX: "16384"
 
 envSecrets:
   MONGODB_URI: retail-mongodb-uri

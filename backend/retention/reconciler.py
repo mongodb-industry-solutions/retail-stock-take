@@ -11,10 +11,10 @@ Run modes:
   * in-process periodic loop (started from main.py lifespan), and
   * one-shot CLI:  `python -m retention.reconciler`  (future K8s CronJob).
 
-MongoDB stores the logical retention intent; this job enforces it regardless of
-whether the object store offers lifecycle/TTL — SeaweedFS lifecycle support has
-caveats, so we never depend on it.
+MongoDB stores the logical retention intent; this job enforces it, so we never
+depend on the object store's lifecycle/TTL support.
 """
+
 from __future__ import annotations
 
 import asyncio

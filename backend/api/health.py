@@ -36,7 +36,7 @@ async def _check_cv() -> str:
             r = await c.get(f"{base}/api/tags")
             r.raise_for_status()
             tags = [m.get("name") for m in r.json().get("models", [])]
-            # Ollama tags carry a ":<tag>" suffix (e.g. "moondream:latest");
+            # Ollama tags carry a ":<tag>" suffix (e.g. "qwen2.5vl:3b");
             # match on the bare name too.
             if any(t == CV_MODEL or t.split(":")[0] == CV_MODEL for t in tags):
                 return "ok"

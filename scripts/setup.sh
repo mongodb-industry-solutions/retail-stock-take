@@ -20,14 +20,10 @@ cd "$ROOT"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
-# Load .env if present (optional overrides — no credentials required).
-# Create one from .env.example: cp .env.example .env
-if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  set -a; . ./.env; set +a
-fi
+# Isolate the local stack from any ambient KUBECONFIG (e.g. a corporate cluster).
+export KUBECONFIG="$(kind_kubeconfig)"
 
-# ---- configuration (override via .env or the environment) -----------------
+# ---- configuration (override via the environment) -------------------------
 CLUSTER="${KIND_CLUSTER:-retail-stock-take}"
 NS_DB="mongodb"                                   # operator + MongoDB + Ops Manager
 NS_APP="retail"                                   # backend/frontend/powersync + SeaweedFS
@@ -67,7 +63,7 @@ if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
 else
   # The cluster config publishes host ports 80/443 (ingress) + 27017/8080/8333
   # (MongoDB / Ops Manager / S3). These mappings only take effect at creation.
-  kind create cluster --name "$CLUSTER" --config infra/k8s/kind-cluster.yaml
+  kind create cluster --name "$CLUSTER" --config infra/k8s/kind-cluster.yaml --kubeconfig "$KUBECONFIG"
   ok "cluster created"
 fi
 kubectl config use-context "kind-$CLUSTER" >/dev/null
@@ -266,7 +262,18 @@ step "ollama (in-cluster)"
 kubectl -n "$NS_APP" delete svc ollama --ignore-not-found=true >/dev/null
 kubectl apply -f infra/k8s/ollama/ollama.yaml
 ollama_ready() { kubectl -n "$NS_APP" get deploy ollama -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "^1"; }
-spin_wait "ollama" 300 5 -- ollama_ready || warn "ollama pod not ready — check kubectl -n $NS_APP logs deploy/ollama"
+# Live pod state for the spinner (image pull / scheduling / running).
+ollama_status() {
+  local pod phase reason
+  pod="$(kubectl -n "$NS_APP" get pods -l app=ollama -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+  [ -z "$pod" ] && { echo "scheduling"; return 0; }
+  phase="$(kubectl -n "$NS_APP" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null)"
+  reason="$(kubectl -n "$NS_APP" get pod "$pod" -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)"
+  echo "${reason:-${phase:-starting}}"
+}
+# First-run image pull is slow; allow a generous window.
+spin_wait "ollama" "${OLLAMA_READY_TIMEOUT:-900}" 5 --status ollama_status -- ollama_ready \
+  || warn "ollama pod not ready — check kubectl -n $NS_APP logs deploy/ollama"
 
 # ===========================================================================
 step "build images + load into kind"
@@ -284,6 +291,12 @@ for svc in backend frontend powersync; do
   say "released retail-stock-take-$svc"
 done
 
+# Backend/frontend images are tagged `local`, so a rebuilt image won't roll out
+# on its own (the pod template is unchanged) — restart to pick up the new image.
+for svc in backend frontend; do
+  kubectl -n "$NS_APP" rollout restart "deploy/retail-stock-take-$svc-web-app" >/dev/null
+done
+
 # ===========================================================================
 step "ingress"
 kubectl apply -f infra/k8s/ingress/ingress.yaml
@@ -292,18 +305,26 @@ kubectl apply -f infra/k8s/ingress/ingress.yaml
 step "wait for app rollouts"
 for svc in backend frontend powersync; do
   dep="retail-stock-take-$svc-web-app"
-  svc_ready() { local r; r="$(kubectl -n "$NS_APP" get deploy "$dep" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)"; [ "${r:-0}" -ge 1 ]; }
-  rc=0; spin_wait "$svc" 180 3 -- svc_ready || rc=$?
-  [ "$rc" = 0 ] || warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
+  if kubectl -n "$NS_APP" rollout status "deploy/$dep" --timeout=180s >/dev/null; then
+    ok "$svc"
+  else
+    warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
+  fi
 done
 
 # ===========================================================================
+step "sample-shelf gallery (local)"
+# Seed ./sample-shelves/ into SeaweedFS (bucket exists after the rollout above).
+"$ROOT/scripts/seed-samples.sh" || warn "sample-shelf seed failed — gallery may be empty"
+
+# ===========================================================================
 step "ollama models (in-cluster)"
-if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
-  ok "${OLLAMA_MODEL:-moondream} already present"
+# Pull before finishing so CV is usable when setup ends.
+if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-qwen2.5vl:3b}"; then
+  ok "${OLLAMA_MODEL:-qwen2.5vl:3b} already present"
 else
-  ( "$ROOT/scripts/pull-models.sh" ) >/tmp/retail-ollama-pull.log 2>&1 &
-  say "model pull running in the background → /tmp/retail-ollama-pull.log"
+  say "pulling ${OLLAMA_MODEL:-qwen2.5vl:3b} into the cluster (can take several minutes)…"
+  "$ROOT/scripts/pull-models.sh" || warn "model pull failed — run: bash scripts/pull-models.sh"
 fi
 
 # ===========================================================================
@@ -312,10 +333,10 @@ ADMIN_PW="$(ksecret_val "$NS_DB" retail-mongodb-retail-admin-admin password || t
 OM_USER="$(ksecret_val "$NS_DB" ops-manager-admin-secret Username || echo "$OM_ADMIN_USER")"
 OM_PW="$(ksecret_val "$NS_DB" ops-manager-admin-secret Password || true)"
 MONGO_URI="mongodb://admin:${ADMIN_PW:-<password>}@localhost:${HOST_MONGO_PORT}/?authSource=admin&directConnection=true"
-if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-moondream}"; then
-  OLLAMA_SUMMARY="${C_GREEN}ready${C_RESET} — ${OLLAMA_MODEL:-moondream} present in cluster"
+if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-qwen2.5vl:3b}"; then
+  OLLAMA_SUMMARY="${C_GREEN}ready${C_RESET} — ${OLLAMA_MODEL:-qwen2.5vl:3b} present in cluster"
 else
-  OLLAMA_SUMMARY="${C_YELLOW}downloading${C_RESET} — ${OLLAMA_MODEL:-moondream} still pulling (tail /tmp/retail-ollama-pull.log)"
+  OLLAMA_SUMMARY="${C_YELLOW}not ready${C_RESET} — ${OLLAMA_MODEL:-qwen2.5vl:3b} missing; run: bash scripts/pull-models.sh"
 fi
 
 step "ready — local stack is up"
@@ -352,6 +373,6 @@ cat <<EOF
 
   ${C_GREY}Ollama / CV:${C_RESET}  ${OLLAMA_SUMMARY}
 
-  ${C_GREY}Smoke test:${C_RESET} ./scripts/verify.sh      ${C_GREY}Status:${C_RESET} make status      ${C_GREY}Tear down:${C_RESET} ./scripts/reset.sh
+  ${C_GREY}Smoke test:${C_RESET} make verify      ${C_GREY}Status:${C_RESET} make status      ${C_GREY}Tear down:${C_RESET} make reset
 
 EOF

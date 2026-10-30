@@ -7,9 +7,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib.sh
 . "$ROOT/scripts/lib.sh"
 
+# Use the local stack's dedicated kubeconfig (isolated from any ambient KUBECONFIG).
+export KUBECONFIG="$(kind_kubeconfig)"
+
 NS_APP="${NS_APP:-retail}"
-MODEL="${OLLAMA_MODEL:-moondream}"
-# Local default: no fallback (qwen2.5vl:7b exceeds available CPU memory).
+MODEL="${OLLAMA_MODEL:-qwen2.5vl:3b}"
+# Local default: no fallback (the 7B variant exceeds available CPU memory).
 FALLBACK="${OLLAMA_FALLBACK_MODEL:-}"
 
 step "ollama models (in-cluster)"

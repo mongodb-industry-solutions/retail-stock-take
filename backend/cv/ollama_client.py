@@ -6,6 +6,7 @@ import os
 import httpx
 from pydantic import ValidationError
 
+from cv.json_utils import loads_tolerant
 from cv.prompt import SYSTEM_PROMPT, USER_PROMPT
 from cv.validator import CVResponse
 
@@ -14,6 +15,9 @@ log = logging.getLogger("ollama")
 _base = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
 _timeout = float(os.environ.get("OLLAMA_REQUEST_TIMEOUT_SECONDS", "120"))
 _response_schema = CVResponse.model_json_schema()
+_max_attempts = int(os.environ.get("CV_MAX_ATTEMPTS", "2"))
+_num_ctx = int(os.environ.get("OLLAMA_NUM_CTX", "16384"))
+_num_predict = int(os.environ.get("OLLAMA_NUM_PREDICT", "1024"))
 
 
 class OllamaError(RuntimeError):
@@ -33,7 +37,7 @@ async def _call(model: str, image_b64: str) -> dict:
         # into a runaway generation that gets cut off mid-string.
         "format": _response_schema,
         "stream": False,
-        "options": {"num_ctx": 4096, "num_predict": 1024},
+        "options": {"num_ctx": _num_ctx, "num_predict": _num_predict},
     }
     async with httpx.AsyncClient(timeout=_timeout) as client:
         try:
@@ -54,32 +58,49 @@ async def _call(model: str, image_b64: str) -> dict:
         raise OllamaError("ollama returned empty content")
 
     try:
-        return json.loads(content)
+        return loads_tolerant(content)
     except json.JSONDecodeError as e:
-        raise OllamaError(f"model output not valid JSON: {e}; content={content[:200]!r}") from e
+        raise OllamaError(
+            f"model output not valid JSON: {e}; content={content[:200]!r}"
+        ) from e
 
 
 async def analyze_shelf_image(
     image_bytes: bytes, model: str, fallback_model: str
 ) -> tuple[CVResponse, str]:
     """
-    Call Ollama with the primary model; on JSON/validation failure, retry with the fallback.
+    Call Ollama with the primary model, retrying it a bounded number of times on
+    JSON/validation failure; then retry once with the fallback (if configured).
     Returns the validated response and the model name that succeeded.
     """
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
 
+    # (model, attempts): primary gets the retry budget, fallback gets one shot.
+    plan: list[tuple[str, int]] = [(model, _max_attempts)]
+    if fallback_model:
+        plan.append((fallback_model, 1))
+
     last_err: Exception | None = None
-    for attempt_model in (model, fallback_model):
+    for attempt_model, attempts in plan:
         if not attempt_model:
             continue
-        try:
-            raw = await _call(attempt_model, image_b64)
-            validated = CVResponse.model_validate(raw)
-            log.info("ollama %s succeeded: %d items", attempt_model, len(validated.items))
-            return validated, attempt_model
-        except (OllamaError, ValidationError) as e:
-            log.warning("ollama %s failed: %s", attempt_model, e)
-            last_err = e
-            continue
+        for attempt in range(1, attempts + 1):
+            try:
+                raw = await _call(attempt_model, image_b64)
+                validated = CVResponse.model_validate(raw)
+                log.info(
+                    "ollama %s succeeded: %d items", attempt_model, len(validated.items)
+                )
+                return validated, attempt_model
+            except (OllamaError, ValidationError) as e:
+                log.warning(
+                    "ollama %s attempt %d/%d failed: %s",
+                    attempt_model,
+                    attempt,
+                    attempts,
+                    e,
+                )
+                last_err = e
+                continue
 
-    raise OllamaError(f"all models failed; last error: {last_err}")
+    raise OllamaError(f"all attempts failed; last error: {last_err}")

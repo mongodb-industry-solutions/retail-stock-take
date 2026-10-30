@@ -27,6 +27,10 @@ spec:
               value: "0.0.0.0"
             - name: OLLAMA_ORIGINS
               value: "http://ollama:11434"
+            # Keep the model resident so captures don't pay the cold-load cost
+            # between requests (CPU inference is dominated by load + prefill).
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
           ports:
             - containerPort: 11434
           volumeMounts:

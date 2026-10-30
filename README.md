@@ -48,7 +48,7 @@ stream → PowerSync → browser re-renders.
 - FastAPI + Python 3.13 + `uv`
 - Next.js 16 (App Router, JS) + LeafyGreen + Tailwind 4
 - `@powersync/web` + `@journeyapps/wa-sqlite` (OPFS)
-- Ollama (in-cluster; Moondream primary, Qwen2.5-VL 7B optional)
+- Ollama (in-cluster; Qwen2.5-VL 3B)
 - kind (local Kubernetes)
 
 ## Quick start
@@ -67,27 +67,28 @@ open http://frontend.localtest.me
 Manager login, and S3 keys) when it finishes. The cluster exposes them on these host
 ports (always-on, no `kubectl port-forward` needed):
 
-| What | Endpoint | Notes |
-|---|---|---|
-| Web app | `http://frontend.localtest.me` | |
-| Backend health | `http://frontend.localtest.me/api/health` | via the frontend proxy |
-| PowerSync | `http://powersync.localtest.me/probes/liveness` | |
-| MongoDB (Compass) | `localhost:27017` | `…/?authSource=admin&directConnection=true` |
-| Ops Manager UI | `http://localhost:8080` | login printed by `setup.sh` |
-| S3 (SeaweedFS) | `http://localhost:8333` | bucket `store-media`, keys `retaildemo`/`retaildemo-secret` |
-| S3 browser UI | `http://s3.localtest.me/buckets/store-media/` | local dev only; no login needed |
-| Backend API docs | `http://backend.localtest.me/docs` | local dev only; Swagger + ReDoc |
+| What                 | Endpoint                                        | Notes                                                                                |
+| -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Web app              | `http://frontend.localtest.me`                  |                                                                                      |
+| Backend health       | `http://frontend.localtest.me/api/health`       | via the frontend proxy                                                               |
+| PowerSync            | `http://powersync.localtest.me/probes/liveness` |                                                                                      |
+| MongoDB (Compass)    | `localhost:27017`                               | `…/?authSource=admin&directConnection=true`                                          |
+| Ops Manager UI       | `http://localhost:8080`                         | login printed by `setup.sh`                                                          |
+| S3 (SeaweedFS)       | `http://localhost:8333`                         | bucket `store-media`, keys `retaildemo`/`retaildemo-secret`                          |
+| S3 browser UI        | `http://s3.localtest.me/buckets/store-media/`   | local dev only; no login needed                                                      |
+| Backend API docs     | `http://backend.localtest.me/docs`              | local dev only; Swagger + ReDoc                                                      |
+| Sample-shelf gallery | `/api/sample-shelves`                           | curated shelf picker; seeded from [`sample-shelves/`](sample-shelves/) by `setup.sh` |
 
 ## Make targets
 
-| | |
-|---|---|
-| `make setup` | Bring up the kind cluster |
-| `make verify` | End-to-end smoke test |
-| `make status` | `kubectl -n retail get pods,svc,ingress` |
-| `make logs` | Tail app pod logs |
-| `make reset` | Tear down the kind cluster |
-| `make uv_sync` | Refresh backend Python deps |
+|                |                                          |
+| -------------- | ---------------------------------------- |
+| `make setup`   | Bring up the kind cluster                |
+| `make verify`  | End-to-end smoke test                    |
+| `make status`  | `kubectl -n retail get pods,svc,ingress` |
+| `make logs`    | Tail app pod logs                        |
+| `make reset`   | Tear down the kind cluster               |
+| `make uv_sync` | Refresh backend Python deps              |
 
 ## Repo layout
 
@@ -97,7 +98,8 @@ frontend/      Next.js client; PowerSync schema in lib/powersync/schema.js
 powersync/     powersync.yaml + sync-rules.yaml
 infra/k8s/     kind manifests (operator, MongoDB, SeaweedFS, ingress, access/ NodePorts)
 infra/local/  Helm values for the local kind stack
-scripts/       lib.sh (shared helpers) + setup/preflight/verify/reset/pull-models
+scripts/       lib.sh (shared helpers) + setup/preflight/verify/reset/pull-models/seed-samples
+sample-shelves/ Curated shelf photos seeded into the local gallery (scripts/seed-samples.sh)
 docs/          Architecture and troubleshooting notes
 ```
 
