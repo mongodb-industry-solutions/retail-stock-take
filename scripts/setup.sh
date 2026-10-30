@@ -291,6 +291,12 @@ for svc in backend frontend powersync; do
   say "released retail-stock-take-$svc"
 done
 
+# Backend/frontend images are tagged `local`, so a rebuilt image won't roll out
+# on its own (the pod template is unchanged) — restart to pick up the new image.
+for svc in backend frontend; do
+  kubectl -n "$NS_APP" rollout restart "deploy/retail-stock-take-$svc-web-app" >/dev/null
+done
+
 # ===========================================================================
 step "ingress"
 kubectl apply -f infra/k8s/ingress/ingress.yaml
@@ -299,8 +305,12 @@ kubectl apply -f infra/k8s/ingress/ingress.yaml
 step "wait for app rollouts"
 for svc in backend frontend powersync; do
   dep="retail-stock-take-$svc-web-app"
-  svc_ready() { local r; r="$(kubectl -n "$NS_APP" get deploy "$dep" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)"; [ "${r:-0}" -ge 1 ]; }
-  rc=0; spin_wait "$svc" 180 3 -- svc_ready || rc=$?
+  if kubectl -n "$NS_APP" rollout status "deploy/$dep" --timeout=180s >/dev/null; then
+    ok "$svc"
+  else
+    warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
+  fi
+done
   [ "$rc" = 0 ] || warn "$svc not ready — kubectl -n $NS_APP logs deploy/$dep"
 done
 
