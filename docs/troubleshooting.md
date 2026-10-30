@@ -154,6 +154,16 @@ a first-run image pull can take ~5 min (the readiness wait allows up to
 If the pod is in `CrashLoopBackOff`, it likely needs more memory — increase Docker
 Desktop's RAM allocation (Settings → Resources → Memory).
 
+### Capture returns 503 with `400 ... exceeds the available context size`
+
+The image tokenizes into more tokens than the model's context window. Raise
+`OLLAMA_NUM_CTX` in `infra/local/backend.yaml` (default `16384`; a full-resolution
+shelf photo is ~4k tokens) and re-apply the backend:
+
+```bash
+make setup    # rebuilds + redeploys; heavy steps are already up
+```
+
 ### CV returns unexpected items / hallucinations, or capture is slow
 
 Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).

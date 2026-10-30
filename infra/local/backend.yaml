@@ -76,6 +76,9 @@ env:
   OLLAMA_MODEL: qwen2.5vl:3b
   OLLAMA_FALLBACK_MODEL: ""
   OLLAMA_REQUEST_TIMEOUT_SECONDS: "300"
+  # A shelf photo is ~4k visual tokens, so the context must exceed that
+  # (4096 → 400 "exceeds the available context size").
+  OLLAMA_NUM_CTX: "16384"
 
 envSecrets:
   MONGODB_URI: retail-mongodb-uri

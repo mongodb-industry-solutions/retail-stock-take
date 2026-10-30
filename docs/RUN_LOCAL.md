@@ -80,7 +80,13 @@ Docker Desktop on Mac runs containers CPU-only (no Metal/MPS pass-through).
 product labels and returning valid structured JSON (the previous `moondream`
 default was faster but frequently malformed the JSON). `OLLAMA_KEEP_ALIVE=-1`
 keeps the model resident so captures don't pay a cold-load cost. Override the
-model with `OLLAMA_MODEL` in `.env` if needed (larger models are much slower on CPU).
+model with `OLLAMA_MODEL` in `infra/local/backend.yaml` if needed (larger models
+are much slower on CPU).
+
+A single shelf photo tokenizes into ~4k visual tokens, so `OLLAMA_NUM_CTX` is set
+to `16384` in `infra/local/backend.yaml`. If you see a `400 ... exceeds the
+available context size` from a capture, raise it further (very large source
+images use more tokens).
 
 If models need to be re-pulled after a `make reset`:
 
