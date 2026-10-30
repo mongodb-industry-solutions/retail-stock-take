@@ -262,8 +262,7 @@ step "ollama (in-cluster)"
 kubectl -n "$NS_APP" delete svc ollama --ignore-not-found=true >/dev/null
 kubectl apply -f infra/k8s/ollama/ollama.yaml
 ollama_ready() { kubectl -n "$NS_APP" get deploy ollama -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "^1"; }
-# Live status for the spinner: surface the real state (image pull / scheduling /
-# container creating) so a slow first-run pull is visible instead of a bare wait.
+# Live pod state for the spinner (image pull / scheduling / running).
 ollama_status() {
   local pod phase reason
   pod="$(kubectl -n "$NS_APP" get pods -l app=ollama -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
@@ -272,8 +271,7 @@ ollama_status() {
   reason="$(kubectl -n "$NS_APP" get pod "$pod" -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)"
   echo "${reason:-${phase:-starting}}"
 }
-# The ollama/ollama image is ~2.8 GB; a first-run pull alone can exceed 5 min,
-# so allow a generous window (override with OLLAMA_READY_TIMEOUT).
+# First-run image pull is slow; allow a generous window.
 spin_wait "ollama" "${OLLAMA_READY_TIMEOUT:-900}" 5 --status ollama_status -- ollama_ready \
   || warn "ollama pod not ready — check kubectl -n $NS_APP logs deploy/ollama"
 
@@ -308,15 +306,12 @@ done
 
 # ===========================================================================
 step "sample-shelf gallery (local)"
-# Seed ./sample-shelves/ into SeaweedFS so the local "Sample" picker matches the
-# deployed demo. The backend creates the store-media bucket at startup, so this
-# runs after the rollout wait above.
+# Seed ./sample-shelves/ into SeaweedFS (bucket exists after the rollout above).
 "$ROOT/scripts/seed-samples.sh" || warn "sample-shelf seed failed — gallery may be empty"
 
 # ===========================================================================
 step "ollama models (in-cluster)"
-# Blocking pull so setup only finishes once CV is actually usable — otherwise
-# the first captures 503 with "model not found" until the pull completes.
+# Pull before finishing so CV is usable when setup ends.
 if kubectl -n "$NS_APP" exec deploy/ollama -- ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL:-qwen2.5vl:3b}"; then
   ok "${OLLAMA_MODEL:-qwen2.5vl:3b} already present"
 else

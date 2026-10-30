@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
-# Seed the local sample-shelf gallery into SeaweedFS.
-#
-# The curated gallery served by GET /api/sample-shelves is gated by
-# STORAGE_SAMPLES_PREFIX (infra/local/backend.yaml). This uploads the images in
-# ./sample-shelves/ to that prefix in the local `store-media` bucket so the local
-# demo matches the deployed one (the "Sample" picker appears in the UI).
-#
-# Idempotent: re-running overwrites the same keys. Called by setup.sh once the
-# backend (and therefore the bucket) is up; safe to run standalone afterwards.
+# Upload ./sample-shelves/ into SeaweedFS under STORAGE_SAMPLES_PREFIX so the
+# local "Sample" picker matches the deployed demo. Idempotent; called by setup.sh.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,7 +14,6 @@ cd "$ROOT"
 export KUBECONFIG="$(kind_kubeconfig)"
 
 # Must match infra/local/backend.yaml (STORAGE_* + STORAGE_SAMPLES_PREFIX).
-# Overridable via the environment / .env for non-default setups.
 SRC_DIR="${SAMPLE_SHELVES_DIR:-$ROOT/sample-shelves}"
 BUCKET="${STORAGE_BUCKET:-store-media}"
 PREFIX="${STORAGE_SAMPLES_PREFIX:-sample-shelves/}"
@@ -33,7 +25,6 @@ SECRET_KEY="${STORAGE_SECRET_KEY:-retaildemo-secret}"
 export AWS_ACCESS_KEY_ID="$ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$SECRET_KEY"
 export AWS_DEFAULT_REGION="$REGION"
-# Never fall back to instance metadata (there is no IAM role on a laptop).
 export AWS_EC2_METADATA_DISABLED=true
 
 if ! command -v aws >/dev/null 2>&1; then
@@ -51,8 +42,7 @@ if [ "${#images[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# The backend creates the bucket at startup, but ensure it exists so this is
-# safe to run standalone (before the backend is up). Ignore "already exists".
+# Ensure the bucket exists (safe to run before the backend).
 if ! aws --endpoint-url "$ENDPOINT" s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1; then
   aws --endpoint-url "$ENDPOINT" s3 mb "s3://$BUCKET" >/dev/null 2>&1 || true
 fi

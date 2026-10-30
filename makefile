@@ -5,8 +5,7 @@
 # exported by other tooling and would silently override the local target.
 KIND_CLUSTER ?= retail-stock-take
 LOCAL_NS ?= retail
-# Dedicated kubeconfig for the local stack — keeps an ambient KUBECONFIG (e.g. a
-# corporate cluster) from redirecting kubectl. Must match scripts/lib.sh.
+# Dedicated kubeconfig for the local stack (must match scripts/lib.sh).
 KIND_KUBECONFIG ?= $(HOME)/.kube/$(KIND_CLUSTER)-config
 
 setup:

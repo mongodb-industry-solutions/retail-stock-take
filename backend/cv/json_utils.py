@@ -1,10 +1,5 @@
-"""Tolerant JSON extraction for VLM output.
-
-Vision models occasionally return JSON wrapped in a markdown fence, or a
-runaway generation that gets truncated mid-object. `loads_tolerant` first tries
-a strict parse, then salvages the complete item objects it can find, so a single
-bad generation degrades to a partial result instead of failing the whole
-capture. Callers still validate the shape via `CVResponse`.
+"""Tolerant JSON extraction for VLM output: strict parse first, then salvage the
+complete item objects from fenced/truncated output. Callers validate via CVResponse.
 """
 
 from __future__ import annotations
